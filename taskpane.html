@@ -450,9 +450,6 @@ function renderClauses() {
         <div style="font-size:11px;color:#a78bfa;background:#6366f111;padding:7px;border-radius:6px;margin-bottom:6px;line-height:1.4;">
           <strong>Suggested:</strong> ${safeStr(c.suggestedLanguage).slice(0,160)}
         </div>
-        <button class="insert-btn" onclick="insertIntoDocFromClause(${i})">
-          ↩ Insert into doc at cursor
-        </button>
       `:""}
       <div class="decision-btns">
         ${["accept","negotiate","reject","flag"].map(d=>`
@@ -460,20 +457,86 @@ function renderClauses() {
             onclick="setDecision(${i},'${d}')">${{accept:"✓ Accept",negotiate:"↔ Counter",reject:"✕ Reject",flag:"⚑ Flag"}[d]}</button>
         `).join("")}
       </div>
+      ${c.userDecision ? `<div style="font-size:10px;color:#475569;margin-top:6px;">✓ Applied to document</div>` : ""}
     </div>`;
   }).join("");
 }
 
 function setDecision(idx, decision) {
   reviewClauses[idx].userDecision = decision;
+  applyDecisionToDoc(idx, decision);
   renderClauses();
   updateProgress();
 }
 
 function acceptAll() {
-  reviewClauses = reviewClauses.map(c => ({...c, userDecision: c.recommendation}));
+  reviewClauses.forEach((c, i) => {
+    if (!c.userDecision) {
+      reviewClauses[i].userDecision = c.recommendation;
+      applyDecisionToDoc(i, c.recommendation);
+    }
+  });
   renderClauses();
   updateProgress();
+}
+
+// ── Apply decision as comment / markup in the document ────────────────────────
+async function applyDecisionToDoc(idx, decision) {
+  const clause = reviewClauses[idx];
+  const foundText = (clause && clause.found) || "";
+  if (!foundText) return;
+
+  try {
+    await Word.run(async (context) => {
+      // Find the clause text in the document
+      const candidates = [
+        foundText.slice(0, 255).trim(),
+        foundText.slice(0, 180).trim(),
+        foundText.slice(0, 120).trim(),
+        foundText.slice(0, 80).trim(),
+        foundText.slice(0, 50).trim(),
+      ].filter((v, i, arr) => v && arr.indexOf(v) === i);
+
+      let range = null;
+      for (const snippet of candidates) {
+        const results = context.document.body.search(snippet, { matchCase: false, matchWholeWord: false });
+        results.load("items");
+        await context.sync();
+        if (results.items.length > 0) { range = results.items[0]; break; }
+      }
+      if (!range) return;
+
+      if (decision === "accept") {
+        range.insertComment("✓ Accepted");
+
+      } else if (decision === "negotiate") {
+        const counter = clause.suggestedLanguage
+          ? "↔ Counter Proposed:\n" + clause.suggestedLanguage
+          : "↔ Counter proposed — see playbook for suggested language.";
+        range.insertComment(counter);
+
+      } else if (decision === "reject") {
+        range.font.strikeThrough = true;
+        const reason = clause.reasoning
+          ? "✕ Rejected: " + clause.reasoning
+          : "✕ Rejected";
+        range.insertComment(reason);
+
+      } else if (decision === "flag") {
+        const note = clause.reasoning
+          ? "⚑ Flagged for review: " + clause.reasoning
+          : "⚑ Flagged for review";
+        range.insertComment(note);
+      }
+
+      await context.sync();
+    });
+  } catch(e) {
+    // insertComment requires WordApi 1.4 — show a clear message if unsupported
+    if (e.message && e.message.includes("comment")) {
+      alert("Comments are not supported in this version of Word. Try Word Online or Word 365.");
+    }
+  }
 }
 
 function updateProgress() {
