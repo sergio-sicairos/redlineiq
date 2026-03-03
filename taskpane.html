@@ -507,29 +507,29 @@ function toggleSettings() {
 }
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
+function driveTimeout(promise, ms) {
+  const t = new Promise((_, rej) => setTimeout(() => rej(new Error("Drive timed out")), ms));
+  return Promise.race([promise, t]);
+}
+
 Office.onReady(async (info) => {
-  const syncEl = document.getElementById("sync-status");
+  setStep("Starting up…");
   if (driveTokenValid()) {
     setStep("Loading playbook from Drive…");
     try {
-      playbook = await loadFromDrive();
+      playbook = await driveTimeout(loadFromDrive(), 6000);
       renderPlaybookSummary();
-      syncEl.textContent = "● Drive";
-      syncEl.style.color = "#22c55e";
     } catch(e) {
-      syncEl.textContent = "● Drive";
-      syncEl.style.color = "#ef4444";
       playbook = { clauses: getDefaults(), contracts: [], outcomes: [] };
       renderPlaybookSummary();
     }
   } else {
-    syncEl.textContent = "● Drive";
-    syncEl.style.color = "#ef4444";
     playbook = { clauses: getDefaults(), contracts: [], outcomes: [] };
     renderPlaybookSummary();
   }
 
   document.getElementById("loading-screen").style.display = "none";
+  document.getElementById("tab-bar").style.display = "flex";
   if (!getApiKey()) {
     document.getElementById("view-settings").style.display = "block";
     document.getElementById("key-status").innerHTML = '<span style="color:#f59e0b">Please enter your API key to get started.</span>';
