@@ -434,7 +434,7 @@ function renderClauses() {
         <span class="badge" style="background:#47556922;color:#94a3b8;border:1px solid #47556944">AI: ${safeStr(c.recommendation)}</span>
       </div>
       <div style="font-size:11px;color:#94a3b8;margin-bottom:4px;cursor:pointer;"
-        onclick="navigateToClause(${JSON.stringify(safeStr(c.found))})"
+        onclick="navigateToClause(${i})"
         title="Click to jump to this location in the document">
         <strong style="color:#cbd5e1">Found:</strong> ${safeStr(c.found).slice(0,120)}…
         <span style="color:#6366f1;font-size:10px;margin-left:4px;">↗ jump</span>
@@ -579,7 +579,8 @@ async function callClaudeWithMCP(prompt, mcpUrl) {
 }
 
 // ── Navigate to clause in document ───────────────────────────────────────────
-function navigateToClause(foundText) {
+function navigateToClause(idx) {
+  const foundText = (reviewClauses[idx] && reviewClauses[idx].found) || "";
   if (!foundText) return;
   Word.run(async (context) => {
     // Try progressively shorter snippets until we get a match
@@ -594,13 +595,12 @@ function navigateToClause(foundText) {
       results.load("items");
       await context.sync();
       if (results.items.length > 0) {
-        results.items[0].select("Select");
+        results.items[0].select();
         await context.sync();
         return;
       }
     }
-    // Nothing found — just let it be, don't alert the user
-  }).catch(() => {});
+  }).catch(e => alert("Could not navigate: " + e.message));
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
