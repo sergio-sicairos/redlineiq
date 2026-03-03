@@ -124,6 +124,11 @@
       font-size:10px; padding:3px 8px; border-radius:20px;
       background:#22c55e22; color:#22c55e; border:1px solid #22c55e44;
     }
+    .settings-icon {
+      background: none; border: none; color: #475569;
+      cursor: pointer; font-size: 15px; padding: 2px 4px;
+    }
+    .settings-icon:hover { color: #94a3b8; }
   </style>
 </head>
 <body>
@@ -134,6 +139,23 @@
     RedlineIQ
   </div>
   <span id="sync-status">● Drive</span>
+  <button class="settings-icon" onclick="toggleSettings()" title="Settings">⚙</button>
+</div>
+
+<!-- Settings panel -->
+<div id="view-settings" style="display:none; padding:14px;">
+  <div style="font-weight:600; margin-bottom:12px;">Settings</div>
+  <div class="card">
+    <div class="section-title">Anthropic API Key</div>
+    <div class="text-xs text-muted" style="margin-bottom:8px;">
+      Stored only in your browser. Never sent to GitHub.
+      Get yours at console.anthropic.com.
+    </div>
+    <input type="password" id="api-key-input" placeholder="sk-ant-api03-…" />
+    <button class="btn btn-primary btn-full" onclick="saveApiKey()">Save Key</button>
+    <div id="key-status" style="margin-top:8px; font-size:11px;"></div>
+  </div>
+  <button class="btn btn-secondary btn-full" style="margin-top:8px;" onclick="toggleSettings()">← Back</button>
 </div>
 
 <!-- Loading screen -->
@@ -227,6 +249,34 @@ let playbook = { clauses: [], contracts: [], outcomes: [] };
 let reviewClauses = [];
 let docText = "";
 
+// ── API Key (stored in localStorage) ─────────────────────────────────────────
+function getApiKey() { return localStorage.getItem("redlineiq_api_key") || ""; }
+function saveApiKey() {
+  const val = document.getElementById("api-key-input").value.trim();
+  if (!val.startsWith("sk-ant-")) {
+    document.getElementById("key-status").innerHTML = '<span style="color:#ef4444">That doesn\'t look like a valid key.</span>';
+    return;
+  }
+  localStorage.setItem("redlineiq_api_key", val);
+  document.getElementById("key-status").innerHTML = '<span style="color:#22c55e">✓ Key saved.</span>';
+}
+function toggleSettings() {
+  const s = document.getElementById("view-settings");
+  const m = document.getElementById("main");
+  const l = document.getElementById("loading-screen");
+  if (s.style.display === "none") {
+    s.style.display = "block";
+    m.style.display = "none";
+    l.style.display = "none";
+    const k = getApiKey();
+    document.getElementById("api-key-input").value = k ? "••••••••••••••••" : "";
+    document.getElementById("key-status").textContent = k ? "A key is already saved." : "";
+  } else {
+    s.style.display = "none";
+    m.style.display = "block";
+  }
+}
+
 // ── Boot ─────────────────────────────────────────────────────────────────────
 Office.onReady(async (info) => {
   setStep("Loading playbook from Drive…");
@@ -243,8 +293,14 @@ Office.onReady(async (info) => {
     renderPlaybookSummary();
   }
   document.getElementById("loading-screen").style.display = "none";
-  document.getElementById("main").style.display = "block";
-  show("view-idle");
+  if (!getApiKey()) {
+    // First run — show settings so user can enter key
+    document.getElementById("view-settings").style.display = "block";
+    document.getElementById("key-status").innerHTML = '<span style="color:#f59e0b">Please enter your API key to get started.</span>';
+  } else {
+    document.getElementById("main").style.display = "block";
+    show("view-idle");
+  }
 });
 
 // ── Views ────────────────────────────────────────────────────────────────────
@@ -475,9 +531,16 @@ async function writeDriveFile(filename, data) {
 
 // ── Claude API calls ──────────────────────────────────────────────────────────
 async function callClaude(system, user, maxTokens = 4096) {
+  const key = getApiKey();
+  if (!key) throw new Error("No API key set. Click ⚙ to add your Anthropic key.");
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
     body: JSON.stringify({
       model: MODEL, max_tokens: maxTokens,
       system, messages: [{ role:"user", content: user }]
@@ -488,9 +551,16 @@ async function callClaude(system, user, maxTokens = 4096) {
 }
 
 async function callClaudeWithMCP(prompt, mcpUrl) {
+  const key = getApiKey();
+  if (!key) throw new Error("No API key set. Click ⚙ to add your Anthropic key.");
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
     body: JSON.stringify({
       model: MODEL, max_tokens: 4096,
       system: "You are a file manager. Use the MCP tools to complete the task. Return ONLY raw JSON — no markdown, no commentary.",
