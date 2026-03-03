@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>RedlineIQ</title>
   <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -145,17 +146,32 @@
 <!-- Settings panel -->
 <div id="view-settings" style="display:none; padding:14px;">
   <div style="font-weight:600; margin-bottom:12px;">Settings</div>
+
   <div class="card">
     <div class="section-title">Anthropic API Key</div>
     <div class="text-xs text-muted" style="margin-bottom:8px;">
-      Stored only in your browser. Never sent to GitHub.
-      Get yours at console.anthropic.com.
+      Stored only in your browser. Get yours at console.anthropic.com.
     </div>
     <input type="password" id="api-key-input" placeholder="sk-ant-api03-…"
       data-1p-ignore autocomplete="off" data-lpignore="true" data-form-type="other" />
     <button class="btn btn-primary btn-full" onclick="saveApiKey()">Save Key</button>
     <div id="key-status" style="margin-top:8px; font-size:11px;"></div>
   </div>
+
+  <div class="card" style="margin-top:10px;">
+    <div class="section-title">Google Drive</div>
+    <div class="text-xs text-muted" style="margin-bottom:8px;">
+      Stores your playbook, templates, and review history.
+      Paste your Google OAuth Client ID below — see setup instructions.
+    </div>
+    <input type="text" id="gclient-input" placeholder="…apps.googleusercontent.com"
+      data-1p-ignore autocomplete="off" data-lpignore="true" data-form-type="other" />
+    <button class="btn btn-primary btn-full" onclick="saveAndConnectDrive()" id="drive-connect-btn">
+      Connect Google Drive
+    </button>
+    <div id="drive-status" style="margin-top:8px; font-size:11px;"></div>
+  </div>
+
   <button class="btn btn-secondary btn-full" style="margin-top:8px;" onclick="toggleSettings()">← Back</button>
 </div>
 
@@ -242,15 +258,15 @@
 
 <script>
 // ── Config ──────────────────────────────────────────────────────────────────
-const GDRIVE_MCP = "https://gdrive.mcp.claude.com/mcp";
 const FOLDER = "RedlineIQ";
 const MODEL = "claude-sonnet-4-20250514";
+const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 
 let playbook = { clauses: [], contracts: [], outcomes: [] };
 let reviewClauses = [];
 let docText = "";
 
-// ── API Key (stored in localStorage) ─────────────────────────────────────────
+// ── API Key ───────────────────────────────────────────────────────────────────
 function getApiKey() { return localStorage.getItem("redlineiq_api_key") || ""; }
 function saveApiKey() {
   const val = document.getElementById("api-key-input").value.trim();
@@ -261,6 +277,80 @@ function saveApiKey() {
   localStorage.setItem("redlineiq_api_key", val);
   document.getElementById("key-status").innerHTML = '<span style="color:#22c55e">✓ Key saved.</span>';
 }
+
+// ── Google Drive OAuth ────────────────────────────────────────────────────────
+function getClientId()   { return localStorage.getItem("redlineiq_gclient_id") || ""; }
+function getDriveToken() { return localStorage.getItem("redlineiq_drive_token") || ""; }
+function driveTokenValid() {
+  const expiry = parseInt(localStorage.getItem("redlineiq_drive_expiry") || "0");
+  return getDriveToken() && Date.now() < expiry - 60000;
+}
+
+function saveAndConnectDrive() {
+  const val = document.getElementById("gclient-input").value.trim();
+  if (!val.includes("googleusercontent.com")) {
+    document.getElementById("drive-status").innerHTML = '<span style="color:#ef4444">That doesn\'t look like a valid Client ID.</span>';
+    return;
+  }
+  localStorage.setItem("redlineiq_gclient_id", val);
+  connectDrive();
+}
+
+function connectDrive() {
+  const clientId = getClientId();
+  if (!clientId) return;
+  try {
+    const client = google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: DRIVE_SCOPE,
+      callback: async (resp) => {
+        if (resp.error) {
+          document.getElementById("drive-status").innerHTML = `<span style="color:#ef4444">Auth error: ${resp.error}</span>`;
+          return;
+        }
+        const expiry = Date.now() + (resp.expires_in * 1000);
+        localStorage.setItem("redlineiq_drive_token", resp.access_token);
+        localStorage.setItem("redlineiq_drive_expiry", expiry.toString());
+        document.getElementById("drive-status").innerHTML = '<span style="color:#22c55e">✓ Drive connected.</span>';
+        document.getElementById("sync-status").textContent = "● Drive";
+        document.getElementById("sync-status").style.color = "#22c55e";
+        // Load playbook now that we have auth
+        try {
+          playbook = await loadFromDrive();
+          renderPlaybookSummary();
+        } catch(e) { console.warn("Drive load after auth:", e.message); }
+      }
+    });
+    client.requestAccessToken();
+  } catch(e) {
+    document.getElementById("drive-status").innerHTML = `<span style="color:#ef4444">Error: ${e.message}</span>`;
+  }
+}
+
+async function ensureDriveToken() {
+  if (driveTokenValid()) return getDriveToken();
+  // Try silent refresh
+  return new Promise((resolve, reject) => {
+    const clientId = getClientId();
+    if (!clientId) { reject(new Error("No Google Client ID in settings.")); return; }
+    try {
+      const client = google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: DRIVE_SCOPE,
+        prompt: "",
+        callback: (resp) => {
+          if (resp.error) { reject(new Error(resp.error)); return; }
+          const expiry = Date.now() + (resp.expires_in * 1000);
+          localStorage.setItem("redlineiq_drive_token", resp.access_token);
+          localStorage.setItem("redlineiq_drive_expiry", expiry.toString());
+          resolve(resp.access_token);
+        }
+      });
+      client.requestAccessToken({ prompt: "" });
+    } catch(e) { reject(e); }
+  });
+}
+
 function toggleSettings() {
   const s = document.getElementById("view-settings");
   const m = document.getElementById("main");
@@ -272,6 +362,9 @@ function toggleSettings() {
     const k = getApiKey();
     document.getElementById("api-key-input").value = k ? "••••••••••••••••" : "";
     document.getElementById("key-status").textContent = k ? "A key is already saved." : "";
+    const cid = getClientId();
+    document.getElementById("gclient-input").value = cid ? "••••••••••••••••" : "";
+    document.getElementById("drive-status").textContent = driveTokenValid() ? "✓ Drive connected." : cid ? "Token expired — reconnect." : "";
   } else {
     s.style.display = "none";
     m.style.display = "block";
@@ -280,22 +373,29 @@ function toggleSettings() {
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 Office.onReady(async (info) => {
-  setStep("Loading playbook from Drive…");
-  try {
-    playbook = await loadFromDrive();
-    renderPlaybookSummary();
-    setStep("Ready");
-    document.getElementById("sync-status").textContent = "● Drive";
-  } catch(e) {
-    setStep("Drive error: " + e.message.slice(0,60));
-    document.getElementById("sync-status").style.color = "#ef4444";
-    // Still show UI with defaults
+  const syncEl = document.getElementById("sync-status");
+  if (driveTokenValid()) {
+    setStep("Loading playbook from Drive…");
+    try {
+      playbook = await loadFromDrive();
+      renderPlaybookSummary();
+      syncEl.textContent = "● Drive";
+      syncEl.style.color = "#22c55e";
+    } catch(e) {
+      syncEl.textContent = "● Drive";
+      syncEl.style.color = "#ef4444";
+      playbook = { clauses: getDefaults(), contracts: [], outcomes: [] };
+      renderPlaybookSummary();
+    }
+  } else {
+    syncEl.textContent = "● Drive";
+    syncEl.style.color = "#ef4444";
     playbook = { clauses: getDefaults(), contracts: [], outcomes: [] };
     renderPlaybookSummary();
   }
+
   document.getElementById("loading-screen").style.display = "none";
   if (!getApiKey()) {
-    // First run — show settings so user can enter key
     document.getElementById("view-settings").style.display = "block";
     document.getElementById("key-status").innerHTML = '<span style="color:#f59e0b">Please enter your API key to get started.</span>';
   } else {
@@ -576,34 +676,84 @@ async function saveOutcomes() {
   }
 }
 
-// ── Google Drive helpers ──────────────────────────────────────────────────────
+// ── Google Drive REST API ─────────────────────────────────────────────────────
 async function loadFromDrive() {
+  const token = await ensureDriveToken();
+  const folderId = await driveFindOrCreateFolder(token, FOLDER);
   const [pb, co, ou] = await Promise.all([
-    readDriveFile("playbook.json"),
-    readDriveFile("contracts.json"),
-    readDriveFile("outcomes.json"),
+    driveReadFile(token, folderId, "playbook.json"),
+    driveReadFile(token, folderId, "contracts.json"),
+    driveReadFile(token, folderId, "outcomes.json"),
   ]);
   return {
-    clauses: Array.isArray(pb) ? pb : getDefaults(),
+    clauses:   Array.isArray(pb) ? pb : getDefaults(),
     contracts: Array.isArray(co) ? co : [],
-    outcomes: Array.isArray(ou) ? ou : [],
+    outcomes:  Array.isArray(ou) ? ou : [],
   };
 }
 
-async function readDriveFile(filename) {
-  const result = await callClaudeWithMCP(
-    `Find the file "${filename}" inside a folder called "${FOLDER}" in Google Drive. Read its full contents and return ONLY the parsed JSON array or object — no commentary, no markdown.`,
-    GDRIVE_MCP
-  );
-  return repairJSON(result);
+async function writeDriveFile(filename, data) {
+  const token = await ensureDriveToken();
+  const folderId = await driveFindOrCreateFolder(token, FOLDER);
+  await driveWriteFile(token, folderId, filename, data);
 }
 
-async function writeDriveFile(filename, data) {
-  const content = JSON.stringify(data, null, 2);
-  await callClaudeWithMCP(
-    `Find or create a folder named "${FOLDER}" in Google Drive. Find or create a file named "${filename}" inside it. Update it with this exact content:\n\n${content}`,
-    GDRIVE_MCP
-  );
+async function driveFindOrCreateFolder(token, name) {
+  const q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const data = await res.json();
+  if (data.files && data.files.length > 0) return data.files[0].id;
+  // Create it
+  const cr = await fetch("https://www.googleapis.com/drive/v3/files", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ name, mimeType: "application/vnd.google-apps.folder" })
+  });
+  const folder = await cr.json();
+  return folder.id;
+}
+
+async function driveReadFile(token, folderId, filename) {
+  const q = `name='${filename}' and '${folderId}' in parents and trashed=false`;
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const data = await res.json();
+  if (!data.files || data.files.length === 0) return null;
+  const content = await fetch(`https://www.googleapis.com/drive/v3/files/${data.files[0].id}?alt=media`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return await content.json();
+}
+
+async function driveWriteFile(token, folderId, filename, data) {
+  const body = JSON.stringify(data, null, 2);
+  // Check if file already exists
+  const q = `name='${filename}' and '${folderId}' in parents and trashed=false`;
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const existing = await res.json();
+  if (existing.files && existing.files.length > 0) {
+    // Update
+    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${existing.files[0].id}?uploadType=media`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body
+    });
+  } else {
+    // Create
+    const form = new FormData();
+    form.append("metadata", new Blob([JSON.stringify({ name: filename, parents: [folderId] })], { type: "application/json" }));
+    form.append("file", new Blob([body], { type: "application/json" }));
+    await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form
+    });
+  }
 }
 
 // ── Claude API calls ──────────────────────────────────────────────────────────
@@ -627,27 +777,6 @@ async function callClaude(system, user, maxTokens = 4096) {
   return (d.content||[]).map(b=>b.text||"").join("\n");
 }
 
-async function callClaudeWithMCP(prompt, mcpUrl) {
-  const key = getApiKey();
-  if (!key) throw new Error("No API key set. Click ⚙ to add your Anthropic key.");
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": key,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify({
-      model: MODEL, max_tokens: 4096,
-      system: "You are a file manager. Use the MCP tools to complete the task. Return ONLY raw JSON — no markdown, no commentary.",
-      messages: [{ role:"user", content: prompt }],
-      mcp_servers: [{ type:"url", url: mcpUrl, name:"gdrive" }]
-    })
-  });
-  const d = await r.json();
-  return (d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
-}
 
 // ── Navigate to clause in document ───────────────────────────────────────────
 // Normalize text for Word search: replace special chars that look the same
