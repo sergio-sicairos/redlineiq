@@ -488,14 +488,17 @@ async function applyDecisionToDoc(idx, decision) {
 
   try {
     await Word.run(async (context) => {
-      // Find the clause text in the document
+      // Find the clause text in the document (normalize special chars first)
+      const firstLine = foundText.split(/\n/)[0];
       const candidates = [
-        foundText.slice(0, 255).trim(),
-        foundText.slice(0, 180).trim(),
-        foundText.slice(0, 120).trim(),
-        foundText.slice(0, 80).trim(),
-        foundText.slice(0, 50).trim(),
-      ].filter((v, i, arr) => v && arr.indexOf(v) === i);
+        foundText.slice(0, 255),
+        foundText.slice(0, 180),
+        firstLine.slice(0, 180),
+        foundText.slice(0, 120),
+        foundText.slice(0, 80),
+        foundText.slice(0, 50),
+      ].map(normalizeForSearch)
+       .filter((v, i, arr) => v.length > 10 && arr.indexOf(v) === i);
 
       let range = null;
       for (const snippet of candidates) {
@@ -647,20 +650,38 @@ async function callClaudeWithMCP(prompt, mcpUrl) {
 }
 
 // ── Navigate to clause in document ───────────────────────────────────────────
+// Normalize text for Word search: replace special chars that look the same
+// but aren't (smart quotes, em dashes, non-breaking spaces, etc.)
+function normalizeForSearch(text) {
+  return text
+    .replace(/[\u2018\u2019\u02BC]/g, "'")       // smart single quotes → straight
+    .replace(/[\u201C\u201D\u00AB\u00BB]/g, '"') // smart double quotes → straight
+    .replace(/[\u2014\u2015]/g, ' ')             // em dash → space
+    .replace(/\u2013/g, '-')                      // en dash → hyphen
+    .replace(/\u2026/g, '...')                    // ellipsis char → three dots
+    .replace(/\u00A0/g, ' ')                      // non-breaking space → space
+    .replace(/\s+/g, ' ')                         // collapse whitespace
+    .trim();
+}
+
 function navigateToClause(idx) {
   const foundText = (reviewClauses[idx] && reviewClauses[idx].found) || "";
   if (!foundText) return;
   Word.run(async (context) => {
-    // Build candidates from longest to shortest so we highlight as much as possible.
-    // Word's search limit is ~255 chars; deduplicate in case text is short.
+    const firstLine = foundText.split(/\n/)[0]; // avoid cross-paragraph search failures
     const raw = [
-      foundText.slice(0, 255).trim(),
-      foundText.slice(0, 180).trim(),
-      foundText.slice(0, 120).trim(),
-      foundText.slice(0, 80).trim(),
-      foundText.slice(0, 50).trim(),
+      foundText.slice(0, 255),
+      foundText.slice(0, 180),
+      firstLine.slice(0, 180),
+      foundText.slice(0, 120),
+      firstLine.slice(0, 120),
+      foundText.slice(0, 80),
+      foundText.slice(0, 50),
     ];
-    const candidates = raw.filter((v, i, arr) => v && arr.indexOf(v) === i);
+    // Normalize each candidate and deduplicate
+    const candidates = raw
+      .map(normalizeForSearch)
+      .filter((v, i, arr) => v.length > 10 && arr.indexOf(v) === i);
 
     for (const snippet of candidates) {
       const results = context.document.body.search(snippet, { matchCase: false, matchWholeWord: false });
