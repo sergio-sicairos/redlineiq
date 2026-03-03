@@ -29,7 +29,6 @@
       <Host xsi:type="Document">
         <DesktopFormFactor>
 
-          <!-- Ribbon button to open the panel -->
           <ExtensionPoint xsi:type="PrimaryCommandSurface">
             <OfficeTab id="TabHome">
               <Group id="RedlineIQGroup">
@@ -64,9 +63,9 @@
 
     <Resources>
       <bt:Images>
-        <bt:Image id="Icon16" DefaultValue="https://sergio-sicairos.github.io/redlineiq/icon16.png" />
-        <bt:Image id="Icon32" DefaultValue="https://sergio-sicairos.github.io/redlineiq/icon32.png" />
-        <bt:Image id="Icon80" DefaultValue="https://sergio-sicairos.github.io/redlineiq/icon80.png" />
+        <bt:Image id="Icon16" DefaultValue="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR4nGNITvtIEmIY1TCqYfhqAABsrLoQoM6bagAAAABJRU5ErkJggg==" />
+        <bt:Image id="Icon32" DefaultValue="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAKklEQVR4nGNITvtIU8QwasGoBaMWjFowasGoBaMWjFowasGoBaMWDBULAMgi6FsP9QbPAAAAAElFTkSuQmCC" />
+        <bt:Image id="Icon80" DefaultValue="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAABQCAIAAAABc2X6AAAAdUlEQVR4nO3PAQkAIBDAQLsK9reBMYT9wQLs1j53VOv7ATAwMDAwMPCYgOsB1wOuB1wPuB5wPeB6wPWA6wHXA64HXA+4HnA94HrA9YDrAdcDrgdcD7gecD3gesD1gOsB1wOuB1wPuB5wPeB6wPWA6wHXA673AD8JLIasDoRnAAAAAElFTkSuQmCC" />
       </bt:Images>
       <bt:Urls>
         <bt:Url id="PanelUrl" DefaultValue="https://sergio-sicairos.github.io/redlineiq/taskpane.html" />
