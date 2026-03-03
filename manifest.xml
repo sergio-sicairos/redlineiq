@@ -12,6 +12,8 @@
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="RedlineIQ" />
   <Description DefaultValue="AI contract review powered by your shared playbook" />
+  <IconUrl DefaultValue="https://raw.githubusercontent.com/sergio-sicairos/redlineiq/main/icon80.png" />
+  <HighResolutionIconUrl DefaultValue="https://raw.githubusercontent.com/sergio-sicairos/redlineiq/main/icon80.png" />
   <SupportUrl DefaultValue="https://sergio-sicairos.github.io/redlineiq" />
 
   <Hosts>
@@ -33,6 +35,11 @@
             <OfficeTab id="TabHome">
               <Group id="RedlineIQGroup">
                 <Label resid="GroupLabel" />
+                <Icon>
+                  <bt:Image size="16" resid="Icon16" />
+                  <bt:Image size="32" resid="Icon32" />
+                  <bt:Image size="80" resid="Icon80" />
+                </Icon>
                 <Control xsi:type="Button" id="OpenPanelButton">
                   <Label resid="ButtonLabel" />
                   <Supertip>
@@ -52,10 +59,6 @@
               </Group>
             </OfficeTab>
           </ExtensionPoint>
-
-          <TaskPane>
-            <SourceLocation resid="PanelUrl" />
-          </TaskPane>
 
         </DesktopFormFactor>
       </Host>
