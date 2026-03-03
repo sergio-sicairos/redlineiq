@@ -247,6 +247,9 @@
 <!-- ═══ TAB: AI REVIEW ═══ -->
 <div id="tab-review">
 
+  <!-- Drive warning banner -->
+  <div id="drive-banner" style="display:none; margin:10px 14px 0; padding:8px 12px; border-radius:8px; border:1px solid; font-size:11px; font-weight:600;"></div>
+
   <!-- Idle state -->
   <div id="view-idle">
     <div class="card" style="text-align:center; padding:20px;">
@@ -514,20 +517,7 @@ function driveTimeout(promise, ms) {
 
 Office.onReady(async (info) => {
   setStep("Starting up…");
-  if (driveTokenValid()) {
-    setStep("Loading playbook from Drive…");
-    try {
-      playbook = await driveTimeout(loadFromDrive(), 6000);
-      renderPlaybookSummary();
-    } catch(e) {
-      playbook = { clauses: getDefaults(), contracts: [], outcomes: [] };
-      renderPlaybookSummary();
-    }
-  } else {
-    playbook = { clauses: getDefaults(), contracts: [], outcomes: [] };
-    renderPlaybookSummary();
-  }
-
+  await bootLoadDrive();
   document.getElementById("loading-screen").style.display = "none";
   document.getElementById("tab-bar").style.display = "flex";
   if (!getApiKey()) {
@@ -538,6 +528,52 @@ Office.onReady(async (info) => {
     show("view-idle");
   }
 });
+
+async function bootLoadDrive() {
+  if (!driveTokenValid()) {
+    playbook = { clauses: getDefaults(), contracts: [], outcomes: [] };
+    renderPlaybookSummary();
+    setDriveBanner("not-connected");
+    return;
+  }
+  setStep("Loading playbook from Drive…");
+  try {
+    playbook = await driveTimeout(loadFromDrive(), 8000);
+    renderPlaybookSummary();
+    setDriveBanner("ok");
+  } catch(e) {
+    playbook = { clauses: getDefaults(), contracts: [], outcomes: [] };
+    renderPlaybookSummary();
+    setDriveBanner("error", e.message);
+  }
+}
+
+function setDriveBanner(state, msg) {
+  const el = document.getElementById("drive-banner");
+  if (!el) return;
+  if (state === "ok") { el.style.display = "none"; return; }
+  el.style.display = "block";
+  if (state === "not-connected") {
+    el.innerHTML = `<span>⚠ Drive not connected — using default playbook.</span> <button onclick="retryDrive()" style="margin-left:8px;padding:2px 8px;border-radius:4px;border:1px solid #d97706;background:transparent;color:#d97706;font-size:10px;cursor:pointer;">Connect →</button>`;
+    el.style.background = "#fef3c7"; el.style.color = "#d97706"; el.style.borderColor = "#fde68a";
+  } else {
+    el.innerHTML = `<span>⚠ Drive failed to load — using default playbook.</span> <button onclick="retryDrive()" style="margin-left:8px;padding:2px 8px;border-radius:4px;border:1px solid #dc2626;background:transparent;color:#dc2626;font-size:10px;cursor:pointer;">Retry</button>`;
+    el.style.background = "#fee2e2"; el.style.color = "#dc2626"; el.style.borderColor = "#fecaca";
+  }
+}
+
+async function retryDrive() {
+  const el = document.getElementById("drive-banner");
+  if (el) el.innerHTML = `<span>Connecting to Drive…</span>`;
+  if (!driveTokenValid()) { connectDrive(); return; }
+  try {
+    playbook = await driveTimeout(loadFromDrive(), 8000);
+    renderPlaybookSummary();
+    setDriveBanner("ok");
+  } catch(e) {
+    setDriveBanner("error", e.message);
+  }
+}
 
 // ── Views ────────────────────────────────────────────────────────────────────
 function show(id) {
