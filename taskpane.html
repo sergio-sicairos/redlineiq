@@ -10,20 +10,20 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: system-ui, -apple-system, sans-serif;
-      background: #0f172a; color: #e2e8f0;
+      background: #f5f0e8; color: #1a1a2e;
       font-size: 13px; height: 100vh;
       display: flex; flex-direction: column;
     }
     #header {
-      background: linear-gradient(135deg,#1e293b,#0f172a);
-      border-bottom: 1px solid #1e293b;
+      background: #ffffff;
+      border-bottom: 1px solid #e8e2d9;
       padding: 12px 14px;
       display: flex; align-items: center; justify-content: space-between;
     }
-    #header .logo { display:flex; align-items:center; gap:8px; font-weight:700; font-size:15px; }
+    #header .logo { display:flex; align-items:center; gap:8px; font-weight:700; font-size:15px; color:#1a1a2e; }
     #header .logo-icon {
       width:26px; height:26px; border-radius:6px;
-      background: linear-gradient(135deg,#6366f1,#8b5cf6);
+      background: #5b0eff;
       display:flex; align-items:center; justify-content:center; font-size:13px;
     }
     #main { flex:1; overflow-y:auto; padding:14px; }
@@ -34,71 +34,71 @@
       transition: opacity 0.15s;
     }
     .btn:disabled { opacity:0.5; cursor:not-allowed; }
-    .btn-primary { background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; }
-    .btn-secondary { background:#334155; color:#e2e8f0; border:1px solid #475569; }
+    .btn-primary { background:#5b0eff; color:#fff; }
+    .btn-secondary { background:#f0ece4; color:#4b4b6b; border:1px solid #d6d0c8; }
     .btn-sm { padding:5px 10px; font-size:11px; }
     .btn-full { width:100%; justify-content:center; }
     .card {
-      background:#1e293b; border-radius:10px;
-      border:1px solid #334155; padding:14px; margin-bottom:10px;
+      background:#ffffff; border-radius:10px;
+      border:1px solid #e8e2d9; padding:14px; margin-bottom:10px;
     }
     .badge {
       display:inline-block; padding:2px 7px; border-radius:5px;
       font-size:10px; font-weight:600; white-space:nowrap;
     }
     .section-title {
-      font-size:11px; font-weight:600; color:#6366f1;
+      font-size:11px; font-weight:600; color:#5b0eff;
       text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;
     }
     .clause-card {
-      background:#0f172a; border-radius:8px; border:1px solid #334155;
+      background:#faf7f2; border-radius:8px; border:1px solid #e8e2d9;
       padding:12px; margin-bottom:8px;
-      border-left: 3px solid #334155;
+      border-left: 3px solid #d6d0c8;
     }
-    .clause-card.accept  { border-left-color:#22c55e; }
-    .clause-card.negotiate { border-left-color:#f59e0b; }
-    .clause-card.reject  { border-left-color:#ef4444; }
-    .clause-card.flag    { border-left-color:#8b5cf6; }
+    .clause-card.accept    { border-left-color:#16a34a; }
+    .clause-card.negotiate { border-left-color:#d97706; }
+    .clause-card.reject    { border-left-color:#dc2626; }
+    .clause-card.flag      { border-left-color:#5b0eff; }
     .decision-btns { display:flex; gap:4px; flex-wrap:wrap; margin-top:8px; }
     .decision-btn {
       padding:4px 9px; border-radius:6px; font-size:11px; font-weight:600;
-      cursor:pointer; border:2px solid #334155;
-      background:transparent; color:#64748b;
+      cursor:pointer; border:2px solid #d6d0c8;
+      background:transparent; color:#9ca3af;
     }
-    .decision-btn.active-accept  { border-color:#22c55e; background:#22c55e22; color:#22c55e; }
-    .decision-btn.active-negotiate { border-color:#f59e0b; background:#f59e0b22; color:#f59e0b; }
-    .decision-btn.active-reject  { border-color:#ef4444; background:#ef444422; color:#ef4444; }
-    .decision-btn.active-flag    { border-color:#8b5cf6; background:#8b5cf622; color:#8b5cf6; }
+    .decision-btn.active-accept    { border-color:#16a34a; background:#16a34a18; color:#16a34a; }
+    .decision-btn.active-negotiate { border-color:#d97706; background:#d9770618; color:#d97706; }
+    .decision-btn.active-reject    { border-color:#dc2626; background:#dc262618; color:#dc2626; }
+    .decision-btn.active-flag      { border-color:#5b0eff; background:#5b0eff18; color:#5b0eff; }
     .insert-btn {
       margin-top:6px; padding:4px 9px; border-radius:6px;
       font-size:11px; font-weight:600; cursor:pointer;
-      border:1px solid #6366f144; background:#6366f111; color:#a78bfa;
+      border:1px solid #5b0eff44; background:#5b0eff11; color:#5b0eff;
       width:100%;
     }
-    .insert-btn:hover { background:#6366f122; }
-    .text-muted { color:#64748b; }
+    .insert-btn:hover { background:#5b0eff22; }
+    .text-muted { color:#9ca3af; }
     .text-sm { font-size:12px; }
     .text-xs { font-size:11px; }
-    label { font-size:11px; color:#94a3b8; display:block; margin-bottom:4px; }
+    label { font-size:11px; color:#6b7280; display:block; margin-bottom:4px; }
     input, textarea {
       width:100%; padding:7px 10px; border-radius:7px;
-      border:1px solid #475569; background:#0f172a; color:#e2e8f0;
+      border:1px solid #d6d0c8; background:#faf7f2; color:#1a1a2e;
       font-size:12px; margin-bottom:8px;
     }
     textarea { resize:vertical; }
     .progress-bar {
-      height:5px; background:#334155; border-radius:3px; overflow:hidden; margin-bottom:12px;
+      height:5px; background:#e8e2d9; border-radius:3px; overflow:hidden; margin-bottom:12px;
     }
     .progress-fill {
-      height:100%; background:linear-gradient(90deg,#6366f1,#22c55e);
+      height:100%; background:linear-gradient(90deg,#5b0eff,#16a34a);
       border-radius:3px; transition:width 0.3s;
     }
-    .risk-badge-low    { background:#22c55e22; color:#22c55e; border:1px solid #22c55e44; }
-    .risk-badge-medium { background:#f59e0b22; color:#f59e0b; border:1px solid #f59e0b44; }
-    .risk-badge-high   { background:#ef444422; color:#ef4444; border:1px solid #ef444444; }
+    .risk-badge-low    { background:#16a34a18; color:#16a34a; border:1px solid #16a34a44; }
+    .risk-badge-medium { background:#d9770618; color:#d97706; border:1px solid #d9770644; }
+    .risk-badge-high   { background:#dc262618; color:#dc2626; border:1px solid #dc262644; }
     .spinner {
-      width:20px; height:20px; border:2px solid #334155;
-      border-top-color:#6366f1; border-radius:50%;
+      width:20px; height:20px; border:2px solid #e8e2d9;
+      border-top-color:#5b0eff; border-radius:50%;
       animation:spin 0.7s linear infinite; display:inline-block;
     }
     @keyframes spin { to { transform:rotate(360deg); } }
@@ -107,29 +107,29 @@
       align-items:center; justify-content:center; gap:12px; padding:20px;
     }
     #step-indicator {
-      font-size:11px; color:#475569; text-align:center; padding:0 8px;
+      font-size:11px; color:#9ca3af; text-align:center; padding:0 8px;
     }
     .summary-box {
-      background:#0f172a; border-radius:8px; padding:12px;
-      font-size:12px; color:#cbd5e1; line-height:1.6; margin-bottom:10px;
+      background:#faf7f2; border-radius:8px; padding:12px;
+      font-size:12px; color:#4b4b6b; line-height:1.6; margin-bottom:10px;
     }
     .critical-item {
-      font-size:12px; color:#fca5a5; padding:5px 0;
-      border-bottom:1px solid #334155;
+      font-size:12px; color:#dc2626; padding:5px 0;
+      border-bottom:1px solid #e8e2d9;
     }
     .footer {
-      padding:10px 14px; border-top:1px solid #1e293b;
+      padding:10px 14px; border-top:1px solid #e8e2d9;
       display:flex; gap:6px;
     }
     #sync-status {
       font-size:10px; padding:3px 8px; border-radius:20px;
-      background:#22c55e22; color:#22c55e; border:1px solid #22c55e44;
+      background:#5b0eff18; color:#5b0eff; border:1px solid #5b0eff44;
     }
     .settings-icon {
-      background: none; border: none; color: #475569;
+      background: none; border: none; color: #9ca3af;
       cursor: pointer; font-size: 15px; padding: 2px 4px;
     }
-    .settings-icon:hover { color: #94a3b8; }
+    .settings-icon:hover { color: #5b0eff; }
   </style>
 </head>
 <body>
@@ -236,7 +236,7 @@
     <!-- Progress -->
     <div id="progress-section">
       <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
-        <span class="text-xs" style="color:#94a3b8;">Clause Decisions</span>
+        <span class="text-xs" style="color:#6b7280;">Clause Decisions</span>
         <button class="btn btn-secondary btn-sm" onclick="acceptAll()">Accept All AI</button>
       </div>
       <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
@@ -430,7 +430,7 @@ function renderPlaybookSummary() {
       <span class="badge" style="margin-right:4px;margin-bottom:4px;background:${p==='accept'?'#22c55e22':p==='negotiate'?'#f59e0b22':'#ef444422'};color:${p==='accept'?'#22c55e':p==='negotiate'?'#f59e0b':'#ef4444'};border:1px solid ${p==='accept'?'#22c55e44':p==='negotiate'?'#f59e0b44':'#ef444444'}">
         ${n} ${p}
       </span>`).join("")}
-    <div style="margin-top:6px;color:#475569">${playbook.contracts?.filter(c=>c.docRole==='template').length||0} templates · ${playbook.contracts?.filter(c=>c.docRole==='negotiated').length||0} precedents</div>
+    <div style="margin-top:6px;color:#9ca3af">${playbook.contracts?.filter(c=>c.docRole==='template').length||0} templates · ${playbook.contracts?.filter(c=>c.docRole==='negotiated').length||0} precedents</div>
   `;
 }
 
@@ -530,24 +530,23 @@ function renderClauses() {
   const container = document.getElementById("clauses-list");
   container.innerHTML = reviewClauses.map((c,i) => {
     const dec = c.userDecision || c.recommendation;
-    const decColor = {accept:"#22c55e",negotiate:"#f59e0b",reject:"#ef4444",flag:"#8b5cf6"}[dec]||"#334155";
     return `
     <div class="clause-card ${dec}" id="clause-${i}">
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px;">
-        <span class="badge" style="background:#6366f122;color:#a78bfa;border:1px solid #6366f144">${safeStr(c.category)}</span>
-        ${c.sectionRef?`<span class="badge" style="background:#3b82f622;color:#60a5fa;border:1px solid #3b82f644">§ ${safeStr(c.sectionRef)}</span>`:""}
-        <span class="badge" style="background:#47556922;color:#94a3b8;border:1px solid #47556944">AI: ${safeStr(c.recommendation)}</span>
+        <span class="badge" style="background:#5b0eff18;color:#5b0eff;border:1px solid #5b0eff44">${safeStr(c.category)}</span>
+        ${c.sectionRef?`<span class="badge" style="background:#6b728018;color:#4b4b6b;border:1px solid #d6d0c8">§ ${safeStr(c.sectionRef)}</span>`:""}
+        <span class="badge" style="background:#f0ece4;color:#6b7280;border:1px solid #d6d0c8">AI: ${safeStr(c.recommendation)}</span>
       </div>
-      <div style="font-size:11px;color:#94a3b8;margin-bottom:4px;cursor:pointer;"
+      <div style="font-size:11px;color:#6b7280;margin-bottom:4px;cursor:pointer;"
         onclick="navigateToClause(${i})"
         title="Click to jump to this location in the document">
-        <strong style="color:#cbd5e1">Found:</strong> ${safeStr(c.found).slice(0,120)}…
-        <span style="color:#6366f1;font-size:10px;margin-left:4px;">↗ jump</span>
+        <strong style="color:#1a1a2e">Found:</strong> ${safeStr(c.found).slice(0,120)}…
+        <span style="color:#5b0eff;font-size:10px;margin-left:4px;">↗ jump</span>
       </div>
-      ${c.deviationFromTemplate?`<div style="font-size:11px;color:#f59e0b;margin-bottom:4px;">⚠ ${safeStr(c.deviationFromTemplate).slice(0,100)}</div>`:""}
-      <div style="font-size:11px;color:#cbd5e1;line-height:1.5;margin-bottom:6px;">${safeStr(c.reasoning).slice(0,150)}</div>
+      ${c.deviationFromTemplate?`<div style="font-size:11px;color:#d97706;margin-bottom:4px;">⚠ ${safeStr(c.deviationFromTemplate).slice(0,100)}</div>`:""}
+      <div style="font-size:11px;color:#4b4b6b;line-height:1.5;margin-bottom:6px;">${safeStr(c.reasoning).slice(0,150)}</div>
       ${c.suggestedLanguage?`
-        <div style="font-size:11px;color:#a78bfa;background:#6366f111;padding:7px;border-radius:6px;margin-bottom:6px;line-height:1.4;">
+        <div style="font-size:11px;color:#5b0eff;background:#5b0eff0d;padding:7px;border-radius:6px;margin-bottom:6px;line-height:1.4;border:1px solid #5b0eff22;">
           <strong>Suggested:</strong> ${safeStr(c.suggestedLanguage).slice(0,160)}
         </div>
       `:""}
@@ -557,7 +556,7 @@ function renderClauses() {
             onclick="setDecision(${i},'${d}')">${{accept:"✓ Accept",negotiate:"↔ Counter",reject:"✕ Reject",flag:"⚑ Flag"}[d]}</button>
         `).join("")}
       </div>
-      ${c.userDecision ? `<div style="font-size:10px;color:#475569;margin-top:6px;">✓ Applied to document</div>` : ""}
+      ${c.userDecision ? `<div style="font-size:10px;color:#9ca3af;margin-top:6px;">✓ Applied to document</div>` : ""}
     </div>`;
   }).join("");
 }
