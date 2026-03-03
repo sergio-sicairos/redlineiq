@@ -588,14 +588,18 @@ function navigateToClause(idx) {
   const foundText = (reviewClauses[idx] && reviewClauses[idx].found) || "";
   if (!foundText) return;
   Word.run(async (context) => {
-    // Try progressively shorter snippets until we get a match
-    const candidates = [
-      foundText.slice(0, 100).trim(),
-      foundText.slice(0, 60).trim(),
-      foundText.slice(0, 40).trim(),
+    // Build candidates from longest to shortest so we highlight as much as possible.
+    // Word's search limit is ~255 chars; deduplicate in case text is short.
+    const raw = [
+      foundText.slice(0, 255).trim(),
+      foundText.slice(0, 180).trim(),
+      foundText.slice(0, 120).trim(),
+      foundText.slice(0, 80).trim(),
+      foundText.slice(0, 50).trim(),
     ];
+    const candidates = raw.filter((v, i, arr) => v && arr.indexOf(v) === i);
+
     for (const snippet of candidates) {
-      if (!snippet) continue;
       const results = context.document.body.search(snippet, { matchCase: false, matchWholeWord: false });
       results.load("items");
       await context.sync();
