@@ -389,6 +389,10 @@ function getDocumentText() {
 }
 
 // ── Insert text into Word at cursor ─────────────────────────────────────────
+function insertIntoDocFromClause(idx) {
+  const text = (reviewClauses[idx] && reviewClauses[idx].suggestedLanguage) || "";
+  insertIntoDoc(text);
+}
 function insertIntoDoc(text) {
   Word.run(async (context) => {
     const range = context.document.getSelection();
@@ -445,7 +449,7 @@ function renderClauses() {
         <div style="font-size:11px;color:#a78bfa;background:#6366f111;padding:7px;border-radius:6px;margin-bottom:6px;line-height:1.4;">
           <strong>Suggested:</strong> ${safeStr(c.suggestedLanguage).slice(0,160)}
         </div>
-        <button class="insert-btn" onclick="insertIntoDoc(${JSON.stringify(safeStr(c.suggestedLanguage)).replace(/'/g,"\\'")})" >
+        <button class="insert-btn" onclick="insertIntoDocFromClause(${i})">
           ↩ Insert into doc at cursor
         </button>
       `:""}
