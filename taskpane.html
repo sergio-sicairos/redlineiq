@@ -461,26 +461,29 @@ function connectDrive() {
 
 async function ensureDriveToken() {
   if (driveTokenValid()) return getDriveToken();
-  // Try silent refresh
-  return new Promise((resolve, reject) => {
-    const clientId = getClientId();
-    if (!clientId) { reject(new Error("No Google Client ID in settings.")); return; }
-    try {
-      const client = google.accounts.oauth2.initTokenClient({
-        client_id: clientId,
-        scope: DRIVE_SCOPE,
-        prompt: "",
-        callback: (resp) => {
-          if (resp.error) { reject(new Error(resp.error)); return; }
-          const expiry = Date.now() + (resp.expires_in * 1000);
-          localStorage.setItem("redlineiq_drive_token", resp.access_token);
-          localStorage.setItem("redlineiq_drive_expiry", expiry.toString());
-          resolve(resp.access_token);
-        }
-      });
-      client.requestAccessToken({ prompt: "" });
-    } catch(e) { reject(e); }
-  });
+  const clientId = getClientId();
+  if (!clientId) throw new Error("No Google Client ID in settings.");
+  // Try silent refresh with a 5-second timeout — if GIS doesn't respond, fail fast
+  return Promise.race([
+    new Promise((resolve, reject) => {
+      try {
+        const client = google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: DRIVE_SCOPE,
+          prompt: "",
+          callback: (resp) => {
+            if (resp.error) { reject(new Error(resp.error)); return; }
+            const expiry = Date.now() + (resp.expires_in * 1000);
+            localStorage.setItem("redlineiq_drive_token", resp.access_token);
+            localStorage.setItem("redlineiq_drive_expiry", expiry.toString());
+            resolve(resp.access_token);
+          }
+        });
+        client.requestAccessToken({ prompt: "" });
+      } catch(e) { reject(e); }
+    }),
+    new Promise((_, rej) => setTimeout(() => rej(new Error("Auth timed out — click Connect in settings.")), 5000))
+  ]);
 }
 
 function toggleSettings() {
@@ -530,21 +533,26 @@ Office.onReady(async (info) => {
 });
 
 async function bootLoadDrive() {
-  if (!driveTokenValid()) {
+  const clientId = getClientId();
+  if (!clientId) {
+    // Never configured — show not-connected banner quietly
     playbook = { clauses: getDefaults(), contracts: [], outcomes: [] };
     renderPlaybookSummary();
     setDriveBanner("not-connected");
     return;
   }
-  setStep("Loading playbook from Drive…");
+  // Client ID exists — always try (uses cached token or silent refresh)
+  setStep("Connecting to Drive…");
   try {
-    playbook = await driveTimeout(loadFromDrive(), 8000);
+    playbook = await driveTimeout(loadFromDrive(), 7000);
     renderPlaybookSummary();
     setDriveBanner("ok");
   } catch(e) {
     playbook = { clauses: getDefaults(), contracts: [], outcomes: [] };
     renderPlaybookSummary();
-    setDriveBanner("error", e.message);
+    // Distinguish "needs login" from "load error"
+    const needsLogin = e.message.includes("timed out") || e.message.includes("Auth");
+    setDriveBanner(needsLogin ? "not-connected" : "error", e.message);
   }
 }
 
@@ -554,7 +562,9 @@ function setDriveBanner(state, msg) {
   if (state === "ok") { el.style.display = "none"; return; }
   el.style.display = "block";
   if (state === "not-connected") {
-    el.innerHTML = `<span>⚠ Drive not connected — using default playbook.</span> <button onclick="retryDrive()" style="margin-left:8px;padding:2px 8px;border-radius:4px;border:1px solid #d97706;background:transparent;color:#d97706;font-size:10px;cursor:pointer;">Connect →</button>`;
+    const hasId = !!getClientId();
+    const label = hasId ? "Reconnect" : "Connect →";
+    el.innerHTML = `<span>⚠ Drive session expired — using default playbook.</span> <button onclick="retryDrive()" style="margin-left:8px;padding:2px 8px;border-radius:4px;border:1px solid #d97706;background:transparent;color:#d97706;font-size:10px;cursor:pointer;">${label}</button>`;
     el.style.background = "#fef3c7"; el.style.color = "#d97706"; el.style.borderColor = "#fde68a";
   } else {
     el.innerHTML = `<span>⚠ Drive failed to load — using default playbook.</span> <button onclick="retryDrive()" style="margin-left:8px;padding:2px 8px;border-radius:4px;border:1px solid #dc2626;background:transparent;color:#dc2626;font-size:10px;cursor:pointer;">Retry</button>`;
