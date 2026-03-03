@@ -782,25 +782,7 @@ async function applyDecisionToDoc(idx, decision) {
 
   try {
     await Word.run(async (context) => {
-      // Find the clause text in the document (normalize special chars first)
-      const firstLine = foundText.split(/\n/)[0];
-      const candidates = [
-        foundText.slice(0, 255),
-        foundText.slice(0, 180),
-        firstLine.slice(0, 180),
-        foundText.slice(0, 120),
-        foundText.slice(0, 80),
-        foundText.slice(0, 50),
-      ].map(normalizeForSearch)
-       .filter((v, i, arr) => v.length > 10 && arr.indexOf(v) === i);
-
-      let range = null;
-      for (const snippet of candidates) {
-        const results = context.document.body.search(snippet, { matchCase: false, matchWholeWord: false });
-        results.load("items");
-        await context.sync();
-        if (results.items.length > 0) { range = results.items[0]; break; }
-      }
+      const range = await findClauseRange(context, foundText);
       if (!range) return;
 
       if (decision === "accept") {
@@ -1079,36 +1061,54 @@ function normalizeForSearch(text) {
     .trim();
 }
 
+// Find the best range for a clause in the document.
+// Uses start+end anchor expansion for full coverage across paragraph boundaries.
+async function findClauseRange(context, foundText) {
+  const norm = normalizeForSearch(foundText);
+  if (norm.length < 10) return null;
+
+  // Try anchoring start and end separately, then expand between them
+  const startAnchor = norm.slice(0, 60).trim();
+  const endAnchor   = norm.slice(-60).trim();
+
+  if (startAnchor.length > 10 && endAnchor.length > 10 && startAnchor !== endAnchor) {
+    try {
+      const sRes = context.document.body.search(startAnchor, { matchCase: false, matchWholeWord: false });
+      const eRes = context.document.body.search(endAnchor,   { matchCase: false, matchWholeWord: false });
+      sRes.load("items"); eRes.load("items");
+      await context.sync();
+      if (sRes.items.length > 0 && eRes.items.length > 0) {
+        return sRes.items[0].expandTo(eRes.items[0]);
+      }
+    } catch(_) { /* fall through to snippet search */ }
+  }
+
+  // Fallback: progressive shorter snippets (single-paragraph)
+  const firstLine = norm.split(/\n/)[0];
+  const candidates = [
+    norm.slice(0, 255), norm.slice(0, 180),
+    firstLine.slice(0, 180), norm.slice(0, 120),
+    firstLine.slice(0, 120), norm.slice(0, 80), norm.slice(0, 50),
+  ].filter((v, i, arr) => v.length > 10 && arr.indexOf(v) === i);
+
+  for (const snippet of candidates) {
+    const res = context.document.body.search(snippet, { matchCase: false, matchWholeWord: false });
+    res.load("items");
+    await context.sync();
+    if (res.items.length > 0) return res.items[0];
+  }
+  return null;
+}
+
 function navigateToClause(idx) {
   const foundText = (reviewClauses[idx] && reviewClauses[idx].found) || "";
   if (!foundText) return;
   Word.run(async (context) => {
-    const firstLine = foundText.split(/\n/)[0]; // avoid cross-paragraph search failures
-    const raw = [
-      foundText.slice(0, 255),
-      foundText.slice(0, 180),
-      firstLine.slice(0, 180),
-      foundText.slice(0, 120),
-      firstLine.slice(0, 120),
-      foundText.slice(0, 80),
-      foundText.slice(0, 50),
-    ];
-    // Normalize each candidate and deduplicate
-    const candidates = raw
-      .map(normalizeForSearch)
-      .filter((v, i, arr) => v.length > 10 && arr.indexOf(v) === i);
-
-    for (const snippet of candidates) {
-      const results = context.document.body.search(snippet, { matchCase: false, matchWholeWord: false });
-      results.load("items");
-      await context.sync();
-      if (results.items.length > 0) {
-        results.items[0].select();
-        await context.sync();
-        return;
-      }
-    }
-  }).catch(e => alert("Could not navigate: " + e.message));
+    const range = await findClauseRange(context, foundText);
+    if (!range) return;
+    range.select();
+    await context.sync();
+  }).catch(e => console.warn("Could not navigate:", e.message));
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
