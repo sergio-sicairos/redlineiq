@@ -433,7 +433,12 @@ function renderClauses() {
         ${c.sectionRef?`<span class="badge" style="background:#3b82f622;color:#60a5fa;border:1px solid #3b82f644">§ ${safeStr(c.sectionRef)}</span>`:""}
         <span class="badge" style="background:#47556922;color:#94a3b8;border:1px solid #47556944">AI: ${safeStr(c.recommendation)}</span>
       </div>
-      <div style="font-size:11px;color:#94a3b8;margin-bottom:4px;"><strong style="color:#cbd5e1">Found:</strong> ${safeStr(c.found).slice(0,120)}…</div>
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:4px;cursor:pointer;"
+        onclick="navigateToClause(${JSON.stringify(safeStr(c.found))})"
+        title="Click to jump to this location in the document">
+        <strong style="color:#cbd5e1">Found:</strong> ${safeStr(c.found).slice(0,120)}…
+        <span style="color:#6366f1;font-size:10px;margin-left:4px;">↗ jump</span>
+      </div>
       ${c.deviationFromTemplate?`<div style="font-size:11px;color:#f59e0b;margin-bottom:4px;">⚠ ${safeStr(c.deviationFromTemplate).slice(0,100)}</div>`:""}
       <div style="font-size:11px;color:#cbd5e1;line-height:1.5;margin-bottom:6px;">${safeStr(c.reasoning).slice(0,150)}</div>
       ${c.suggestedLanguage?`
@@ -571,6 +576,31 @@ async function callClaudeWithMCP(prompt, mcpUrl) {
   });
   const d = await r.json();
   return (d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
+}
+
+// ── Navigate to clause in document ───────────────────────────────────────────
+function navigateToClause(foundText) {
+  if (!foundText) return;
+  Word.run(async (context) => {
+    // Try progressively shorter snippets until we get a match
+    const candidates = [
+      foundText.slice(0, 100).trim(),
+      foundText.slice(0, 60).trim(),
+      foundText.slice(0, 40).trim(),
+    ];
+    for (const snippet of candidates) {
+      if (!snippet) continue;
+      const results = context.document.body.search(snippet, { matchCase: false, matchWholeWord: false });
+      results.load("items");
+      await context.sync();
+      if (results.items.length > 0) {
+        results.items[0].select("Select");
+        await context.sync();
+        return;
+      }
+    }
+    // Nothing found — just let it be, don't alert the user
+  }).catch(() => {});
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
