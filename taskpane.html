@@ -855,6 +855,14 @@ async function applyDecisionToDoc(idx, decision) {
 
   try {
     await Word.run(async (context) => {
+
+      // Comment items: reply to the existing comment instead of creating a new one
+      if (clause.category === "Comment") {
+        await replyToMatchingComment(context, clause, decision);
+        return;
+      }
+
+      // Regular clauses: find range and insert comment / markup
       const range = await findClauseRange(context, foundText);
       if (!range) return;
 
@@ -884,11 +892,55 @@ async function applyDecisionToDoc(idx, decision) {
       await context.sync();
     });
   } catch(e) {
-    // insertComment requires WordApi 1.4 — show a clear message if unsupported
     if (e.message && e.message.includes("comment")) {
       alert("Comments are not supported in this version of Word. Try Word Online or Word 365.");
     }
   }
+}
+
+// Find the document comment whose anchored text best matches clause.found,
+// then reply to it with the appropriate text for the given decision.
+async function replyToMatchingComment(context, clause, decision) {
+  const coll = context.document.body.getComments();
+  coll.load("items");
+  await context.sync();
+  if (!coll.items.length) return;
+
+  coll.items.forEach(c => c.load("content"));
+  const ranges = coll.items.map(c => c.getRange());
+  ranges.forEach(r => r.load("text"));
+  await context.sync();
+
+  // Pick the comment whose anchored text best overlaps with clause.found
+  const normFound = normalizeForSearch(clause.found || "").slice(0, 100);
+  let matched = coll.items[0]; // default to first if nothing better found
+  let bestLen = 0;
+  for (let i = 0; i < coll.items.length; i++) {
+    const anchor = normalizeForSearch(ranges[i].text || "").slice(0, 100);
+    const shorter = normFound.length <= anchor.length ? normFound : anchor;
+    const longer  = normFound.length >  anchor.length ? normFound : anchor;
+    const overlap = shorter.slice(0, 60);
+    if (overlap && longer.includes(overlap) && overlap.length > bestLen) {
+      bestLen = overlap.length;
+      matched = coll.items[i];
+    }
+  }
+
+  const replyText = {
+    accept:    "Accepted",
+    negotiate: clause.suggestedLanguage
+                 ? "↔ Counter: " + clause.suggestedLanguage.slice(0, 300)
+                 : "↔ Counter proposed",
+    reject:    clause.reasoning
+                 ? "✕ Rejected: " + clause.reasoning.slice(0, 300)
+                 : "✕ Rejected",
+    flag:      clause.reasoning
+                 ? "⚑ Flagged: " + clause.reasoning.slice(0, 300)
+                 : "⚑ Flagged for review",
+  }[decision] || "Reviewed";
+
+  matched.replies.add(replyText);
+  await context.sync();
 }
 
 function updateProgress() {
