@@ -130,6 +130,53 @@
       cursor: pointer; font-size: 15px; padding: 2px 4px;
     }
     .settings-icon:hover { color: #5b0eff; }
+    /* ── Tabs ── */
+    #tab-bar {
+      display: none;
+      background: #ffffff;
+      border-bottom: 1px solid #e8e2d9;
+      padding: 0 14px;
+      gap: 0;
+    }
+    .tab-btn {
+      background: none; border: none; border-bottom: 2px solid transparent;
+      padding: 10px 14px; font-size: 12px; font-weight: 600;
+      color: #9ca3af; cursor: pointer; transition: color 0.15s;
+    }
+    .tab-btn:hover { color: #4b4b6b; }
+    .tab-btn.active { color: #5b0eff; border-bottom-color: #5b0eff; }
+    /* ── Upload tab ── */
+    .category-pills { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+    .pill {
+      padding:5px 12px; border-radius:20px; font-size:11px; font-weight:600;
+      cursor:pointer; border:1.5px solid #d6d0c8; background:#f0ece4; color:#6b7280;
+      transition: all 0.15s;
+    }
+    .pill.active { border-color:#5b0eff; background:#5b0eff18; color:#5b0eff; }
+    .upload-drop {
+      border:2px dashed #d6d0c8; border-radius:10px; padding:24px;
+      text-align:center; cursor:pointer; transition:border-color 0.15s;
+      background:#faf7f2;
+    }
+    .upload-drop:hover { border-color:#5b0eff; }
+    .upload-drop input[type=file] { display:none; }
+    /* ── Resources tab ── */
+    .stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
+    .stat-card {
+      background:#ffffff; border:1px solid #e8e2d9; border-radius:8px;
+      padding:12px; text-align:center;
+    }
+    .stat-card .stat-num { font-size:22px; font-weight:700; color:#5b0eff; }
+    .stat-card .stat-label { font-size:10px; color:#9ca3af; margin-top:2px; }
+    .resource-row {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:8px 0; border-bottom:1px solid #f0ece4; font-size:11px;
+    }
+    .resource-row:last-child { border-bottom:none; }
+    .type-tag {
+      font-size:10px; font-weight:600; padding:2px 7px; border-radius:4px;
+      background:#5b0eff18; color:#5b0eff; border:1px solid #5b0eff33;
+    }
   </style>
 </head>
 <body>
@@ -139,8 +186,13 @@
     <div class="logo-icon">📄</div>
     RedlineIQ
   </div>
-  <span id="sync-status">● Drive</span>
   <button class="settings-icon" onclick="toggleSettings()" title="Settings">⚙</button>
+</div>
+
+<div id="tab-bar" style="display:flex;">
+  <button class="tab-btn active" data-tab="review" onclick="switchTab('review')">AI Review</button>
+  <button class="tab-btn" data-tab="upload" onclick="switchTab('upload')">Upload</button>
+  <button class="tab-btn" data-tab="resources" onclick="switchTab('resources')">Resources</button>
 </div>
 
 <!-- Settings panel -->
@@ -172,6 +224,14 @@
     <div id="drive-status" style="margin-top:8px; font-size:11px;"></div>
   </div>
 
+  <div class="card" style="margin-top:10px;">
+    <div class="section-title">Drive Status</div>
+    <div id="drive-indicator" style="font-size:12px; color:#9ca3af;">Checking…</div>
+    <button class="btn btn-secondary btn-full" style="margin-top:8px;" onclick="connectDrive()" id="drive-reconnect-btn">
+      Reconnect Google Drive
+    </button>
+  </div>
+
   <button class="btn btn-secondary btn-full" style="margin-top:8px;" onclick="toggleSettings()">← Back</button>
 </div>
 
@@ -183,6 +243,9 @@
 
 <!-- Main content (hidden until ready) -->
 <div id="main" style="display:none">
+
+<!-- ═══ TAB: AI REVIEW ═══ -->
+<div id="tab-review">
 
   <!-- Idle state -->
   <div id="view-idle">
@@ -254,7 +317,71 @@
     </div>
   </div>
 
-</div>
+</div> <!-- end tab-review -->
+
+<!-- ═══ TAB: UPLOAD ═══ -->
+<div id="tab-upload" style="display:none; padding:14px;">
+
+  <div class="card">
+    <div class="section-title">Category</div>
+    <div class="category-pills">
+      <span class="pill active" data-cat="templates" onclick="selectCategory(this,'templates')">Standard Templates</span>
+      <span class="pill" data-cat="positions" onclick="selectCategory(this,'positions')">Our Positions</span>
+      <span class="pill" data-cat="completed" onclick="selectCategory(this,'completed')">Completed Docs</span>
+    </div>
+
+    <div class="section-title">Document Type</div>
+    <div class="category-pills" id="type-pills">
+      <span class="pill active" data-type="MSA" onclick="selectType(this,'MSA')">MSA</span>
+      <span class="pill" data-type="DPA" onclick="selectType(this,'DPA')">DPA</span>
+      <span class="pill" data-type="MNDA" onclick="selectType(this,'MNDA')">MNDA</span>
+      <span class="pill" data-type="NDA" onclick="selectType(this,'NDA')">NDA</span>
+      <span class="pill" data-type="SOW" onclick="selectType(this,'SOW')">SOW</span>
+      <span class="pill" data-type="Other" onclick="selectType(this,'Other')">Other</span>
+    </div>
+
+    <div class="upload-drop" onclick="document.getElementById('upload-file-input').click()">
+      <div style="font-size:24px;margin-bottom:8px;">☁</div>
+      <div style="font-weight:600;font-size:12px;margin-bottom:4px;">Click to choose a file</div>
+      <div class="text-muted text-xs">PDF, DOCX, or TXT</div>
+      <div id="upload-filename" style="margin-top:8px;font-size:11px;color:#5b0eff;font-weight:600;"></div>
+      <input type="file" id="upload-file-input" accept=".pdf,.docx,.doc,.txt"
+        onchange="document.getElementById('upload-filename').textContent = this.files[0]?.name || ''" />
+    </div>
+
+    <button class="btn btn-primary btn-full" style="margin-top:12px;" onclick="uploadDocument()" id="upload-btn">
+      Upload to Drive
+    </button>
+    <div id="upload-status" style="margin-top:8px;font-size:11px;"></div>
+  </div>
+
+</div> <!-- end tab-upload -->
+
+<!-- ═══ TAB: RESOURCES ═══ -->
+<div id="tab-resources" style="display:none; padding:14px;">
+
+  <div id="resources-loading" style="text-align:center;padding:30px;">
+    <div class="spinner" style="margin:0 auto 10px;"></div>
+    <div class="text-xs text-muted">Loading from Drive…</div>
+  </div>
+
+  <div id="resources-content" style="display:none;">
+    <div class="stat-grid" id="stats-grid"></div>
+    <div class="card">
+      <div class="section-title">All Documents</div>
+      <div id="resources-list"></div>
+    </div>
+  </div>
+
+  <div id="resources-empty" style="display:none;text-align:center;padding:30px;">
+    <div style="font-size:28px;margin-bottom:8px;">📂</div>
+    <div style="font-weight:600;margin-bottom:4px;">No documents yet</div>
+    <div class="text-muted text-xs">Upload documents in the Upload tab to see them here.</div>
+  </div>
+
+</div> <!-- end tab-resources -->
+
+</div> <!-- end #main -->
 
 <script>
 // ── Config ──────────────────────────────────────────────────────────────────
@@ -265,6 +392,8 @@ const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 let playbook = { clauses: [], contracts: [], outcomes: [] };
 let reviewClauses = [];
 let docText = "";
+let uploadCategory = "templates";
+let uploadType = "MSA";
 
 // ── API Key ───────────────────────────────────────────────────────────────────
 function getApiKey() { return localStorage.getItem("redlineiq_api_key") || ""; }
@@ -365,9 +494,15 @@ function toggleSettings() {
     const cid = getClientId();
     document.getElementById("gclient-input").value = cid ? "••••••••••••••••" : "";
     document.getElementById("drive-status").textContent = driveTokenValid() ? "✓ Drive connected." : cid ? "Token expired — reconnect." : "";
+    const ind = document.getElementById("drive-indicator");
+    if (ind) ind.innerHTML = driveTokenValid()
+      ? '<span style="color:#16a34a">● Connected</span>'
+      : '<span style="color:#dc2626">● Not connected</span>';
+    document.getElementById("tab-bar").style.display = "none";
   } else {
     s.style.display = "none";
     m.style.display = "block";
+    document.getElementById("tab-bar").style.display = "flex";
   }
 }
 
@@ -778,6 +913,98 @@ async function callClaude(system, user, maxTokens = 4096) {
 
 
 // ── Navigate to clause in document ───────────────────────────────────────────
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  ["review","upload","resources"].forEach(t => {
+    document.getElementById(`tab-${t}`).style.display = t === tab ? "block" : "none";
+    document.querySelector(`[data-tab="${t}"]`).classList.toggle("active", t === tab);
+  });
+  if (tab === "resources") loadResources();
+}
+
+// ── Upload ────────────────────────────────────────────────────────────────────
+function selectCategory(el, cat) {
+  uploadCategory = cat;
+  document.querySelectorAll("[data-cat]").forEach(p => p.classList.remove("active"));
+  el.classList.add("active");
+}
+function selectType(el, type) {
+  uploadType = type;
+  document.querySelectorAll("[data-type]").forEach(p => p.classList.remove("active"));
+  el.classList.add("active");
+}
+
+async function uploadDocument() {
+  const fileInput = document.getElementById("upload-file-input");
+  const file = fileInput.files[0];
+  if (!file) { alert("Please select a file first."); return; }
+  const btn = document.getElementById("upload-btn");
+  const status = document.getElementById("upload-status");
+  btn.disabled = true; btn.textContent = "Uploading…";
+  status.textContent = "";
+  try {
+    const token = await ensureDriveToken();
+    const folderId = await driveFindOrCreateFolder(token, FOLDER);
+    const fileId = await driveUploadFile(token, folderId, file);
+    const resources = await driveReadFile(token, folderId, "resources.json") || [];
+    resources.push({ id: fileId, name: file.name, category: uploadCategory, type: uploadType, size: file.size, uploadedAt: new Date().toISOString() });
+    await driveWriteFile(token, folderId, "resources.json", resources);
+    status.innerHTML = `<span style="color:#16a34a">✓ Uploaded "${file.name}"</span>`;
+    btn.textContent = "Upload to Drive"; btn.disabled = false;
+    fileInput.value = ""; document.getElementById("upload-filename").textContent = "";
+  } catch(e) {
+    status.innerHTML = `<span style="color:#dc2626">Upload failed: ${e.message}</span>`;
+    btn.textContent = "Upload to Drive"; btn.disabled = false;
+  }
+}
+
+async function driveUploadFile(token, folderId, file) {
+  const form = new FormData();
+  form.append("metadata", new Blob([JSON.stringify({ name: file.name, parents: [folderId] })], { type: "application/json" }));
+  form.append("file", file);
+  const res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
+    method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form
+  });
+  const data = await res.json();
+  if (!data.id) throw new Error(data.error?.message || "Upload failed");
+  return data.id;
+}
+
+// ── Resources ─────────────────────────────────────────────────────────────────
+async function loadResources() {
+  document.getElementById("resources-loading").style.display = "block";
+  document.getElementById("resources-content").style.display = "none";
+  document.getElementById("resources-empty").style.display = "none";
+  try {
+    const token = await ensureDriveToken();
+    const folderId = await driveFindOrCreateFolder(token, FOLDER);
+    const resources = await driveReadFile(token, folderId, "resources.json") || [];
+    document.getElementById("resources-loading").style.display = "none";
+    if (!resources.length) { document.getElementById("resources-empty").style.display = "block"; return; }
+    const cats = { templates:0, positions:0, completed:0 };
+    const types = {};
+    resources.forEach(r => { if (cats[r.category]!==undefined) cats[r.category]++; types[r.type]=(types[r.type]||0)+1; });
+    const catLabels = { templates:"Templates", positions:"Positions", completed:"Completed" };
+    document.getElementById("stats-grid").innerHTML =
+      Object.entries(cats).map(([k,v]) => `<div class="stat-card"><div class="stat-num">${v}</div><div class="stat-label">${catLabels[k]}</div></div>`).join("") +
+      `<div class="stat-card"><div class="stat-num">${resources.length}</div><div class="stat-label">Total Docs</div></div>
+       <div class="stat-card"><div class="stat-num">${Object.keys(types).length}</div><div class="stat-label">Doc Types</div></div>`;
+    document.getElementById("resources-list").innerHTML = resources.slice().reverse().map(r => `
+      <div class="resource-row">
+        <div>
+          <div style="font-weight:600;color:#1a1a2e;margin-bottom:2px;">${r.name}</div>
+          <div style="color:#9ca3af;font-size:10px;">${catLabels[r.category]||r.category} · ${new Date(r.uploadedAt).toLocaleDateString()}</div>
+        </div>
+        <span class="type-tag">${r.type}</span>
+      </div>`).join("");
+    document.getElementById("resources-content").style.display = "block";
+  } catch(e) {
+    document.getElementById("resources-loading").style.display = "none";
+    document.getElementById("resources-empty").innerHTML = `<div style="padding:20px;text-align:center;color:#dc2626;">Could not load: ${e.message}</div>`;
+    document.getElementById("resources-empty").style.display = "block";
+  }
+}
+
 // Normalize text for Word search: replace special chars that look the same
 // but aren't (smart quotes, em dashes, non-breaking spaces, etc.)
 function normalizeForSearch(text) {
