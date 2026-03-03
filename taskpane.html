@@ -621,8 +621,13 @@ async function startReview() {
   setStep("Reading document text…");
 
   try {
-    // 1. Extract text from Word document
-    docText = await getDocumentText();
+    // 1. Extract document text and comments in parallel
+    setStep("Reading document…");
+    const [rawText, docComments] = await Promise.all([
+      getDocumentText(),
+      getDocumentComments()
+    ]);
+    docText = rawText;
     if (!docText.trim()) { alert("Document appears to be empty."); show("view-idle"); return; }
 
     setStep("Analyzing against playbook…");
@@ -634,18 +639,27 @@ async function startReview() {
     const tplCtx = (playbook.contracts||[]).filter(c=>c.docRole==="template")
       .map(c=>`[TEMPLATE] ${c.name}:\n${(c.text||"").slice(0,30000)}`).join("\n\n");
 
+    const commentsCtx = docComments.length
+      ? docComments.map((c, i) =>
+          `[COMMENT ${i+1}]${c.resolved ? " (resolved)" : ""} By: ${c.author} | On: "${c.anchoredText.slice(0,150)}" | Note: "${c.content.slice(0,300)}"`
+        ).join("\n")
+      : "None";
+
     const sys = `Senior contract review AI.
 PLAYBOOK:\n${playbookCtx||"None"}
 TEMPLATES:\n${tplCtx||"None"}
 
 Only flag genuine material differences.
 The "sectionRef" field MUST be the full section number exactly as it appears in the document, including all subsection digits (e.g. "8.2.1" not "8" or "8.2"). Never truncate or round up a section number.
-The "found" field MUST be EXACT verbatim text from the document (first 1-2 sentences).
+The "found" field MUST be EXACT verbatim text from the document (first 1-2 sentences of the relevant passage).
+
+Also review each EXISTING COMMENT as its own clause entry. For comment entries: set category to "Comment", set "found" to the exact text the comment is anchored to, set "reasoning" to what the comment raises and whether it needs action, and give a recommendation as normal.
 
 Return JSON only:
 {"overallRisk":"low|medium|high","summary":"2-3 sentences","clauses":[{"category":"","sectionRef":"","found":"EXACT verbatim","deviationFromTemplate":"","recommendation":"accept|negotiate|reject|flag","reasoning":"","suggestedLanguage":""}],"criticalIssues":[],"autoApprovable":true}`;
 
-    const raw = await callClaude(sys, `Review this contract:\n\n${docText.slice(0, 40000)}`, 10000);
+    const userMsg = `Review this contract:\n\n${docText.slice(0, 38000)}\n\nEXISTING DOCUMENT COMMENTS:\n${commentsCtx}`;
+    const raw = await callClaude(sys, userMsg, 10000);
     const result = repairJSON(raw);
 
     setStep("Done.");
@@ -667,6 +681,32 @@ function getDocumentText() {
       await context.sync();
       resolve(body.text);
     }).catch(reject);
+  });
+}
+
+// ── Read all comments from the document ───────────────────────────────────────
+function getDocumentComments() {
+  return new Promise((resolve) => {
+    Word.run(async (context) => {
+      try {
+        const coll = context.document.body.getComments();
+        coll.load("items");
+        await context.sync();
+        if (!coll.items.length) { resolve([]); return; }
+
+        coll.items.forEach(c => c.load("content,authorName,resolved"));
+        const ranges = coll.items.map(c => c.getRange());
+        ranges.forEach(r => r.load("text"));
+        await context.sync();
+
+        resolve(coll.items.map((c, i) => ({
+          author:       c.authorName || "Reviewer",
+          content:      c.content    || "",
+          anchoredText: ranges[i].text || "",
+          resolved:     c.resolved
+        })));
+      } catch(_) { resolve([]); } // comments API not available in this version
+    }).catch(() => resolve([]));
   });
 }
 
@@ -714,7 +754,10 @@ function renderClauses() {
     return `
     <div class="clause-card ${dec}" id="clause-${i}">
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px;">
-        <span class="badge" style="background:#1a1a1a;color:#888888;border:1px solid #2a2a2a">${safeStr(c.category)}</span>
+        ${c.category==="Comment"
+          ? `<span class="badge" style="background:#1a1a1a;color:#aaaaaa;border:1px solid #333333">💬 Comment</span>`
+          : `<span class="badge" style="background:#1a1a1a;color:#888888;border:1px solid #2a2a2a">${safeStr(c.category)}</span>`
+        }
         ${c.sectionRef?`<span class="badge" style="background:#1a1a1a;color:#666666;border:1px solid #2a2a2a">§ ${safeStr(c.sectionRef)}</span>`:""}
         <span class="badge" style="background:#1a1a1a;color:#555555;border:1px solid #2a2a2a">AI: ${safeStr(c.recommendation)}</span>
       </div>
