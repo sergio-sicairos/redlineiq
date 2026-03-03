@@ -630,7 +630,10 @@ async function startReview() {
     docText = rawText;
     if (!docText.trim()) { alert("Document appears to be empty."); show("view-idle"); return; }
 
-    setStep("Analyzing against playbook…");
+    const commentLabel = docComments.length
+      ? `Analyzing document + ${docComments.length} comment${docComments.length > 1 ? "s" : ""}…`
+      : "Analyzing against playbook…";
+    setStep(commentLabel);
 
     // 2. Build context
     const playbookCtx = (playbook.clauses||[]).map(c =>
@@ -689,24 +692,39 @@ function getDocumentComments() {
   return new Promise((resolve) => {
     Word.run(async (context) => {
       try {
+        // Load items + their scalar properties in one pass
         const coll = context.document.body.getComments();
-        coll.load("items");
+        coll.load("items/content,items/authorName,items/resolved");
         await context.sync();
+
         if (!coll.items.length) { resolve([]); return; }
 
-        coll.items.forEach(c => c.load("content,authorName,resolved"));
-        const ranges = coll.items.map(c => c.getRange());
-        ranges.forEach(r => r.load("text"));
-        await context.sync();
-
-        resolve(coll.items.map((c, i) => ({
-          author:       c.authorName || "Reviewer",
-          content:      c.content    || "",
-          anchoredText: ranges[i].text || "",
-          resolved:     c.resolved
-        })));
-      } catch(_) { resolve([]); } // comments API not available in this version
-    }).catch(() => resolve([]));
+        // Load anchored ranges one-by-one — batching getRange() with other
+        // loads can silently fail in some Word versions
+        const out = [];
+        for (const c of coll.items) {
+          let anchoredText = "";
+          try {
+            const r = c.getRange();
+            r.load("text");
+            await context.sync();
+            anchoredText = r.text || "";
+          } catch(re) {
+            console.warn("Comment getRange failed:", re.message);
+          }
+          out.push({
+            author:       c.authorName || "Reviewer",
+            content:      c.content    || "",
+            anchoredText,
+            resolved:     c.resolved
+          });
+        }
+        resolve(out);
+      } catch(e) {
+        console.warn("getDocumentComments error:", e.message);
+        resolve([]);
+      }
+    }).catch(e => { console.warn("Word.run comments error:", e.message); resolve([]); });
   });
 }
 
