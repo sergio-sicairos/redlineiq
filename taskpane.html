@@ -737,14 +737,28 @@ function renderClauses() {
             onclick="setDecision(${i},'${d}')">${{accept:"✓ Accept",negotiate:"↔ Counter",reject:"✕ Reject",flag:"⚑ Flag"}[d]}</button>
         `).join("")}
       </div>
-      ${c.userDecision ? `<div style="font-size:10px;color:#9ca3af;margin-top:6px;">✓ Applied to document</div>` : ""}
+      ${c.userDecision && !c.applied ? `
+        <button onclick="completeDecision(${i})" style="margin-top:8px;width:100%;padding:7px;border-radius:7px;border:none;background:#5b0eff;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">
+          Complete
+        </button>
+      ` : ""}
+      ${c.applied ? `<div style="font-size:10px;color:#9ca3af;margin-top:6px;">✓ Applied to document</div>` : ""}
     </div>`;
   }).join("");
 }
 
 function setDecision(idx, decision) {
   reviewClauses[idx].userDecision = decision;
-  applyDecisionToDoc(idx, decision);
+  reviewClauses[idx].applied = false;
+  renderClauses();
+  updateProgress();
+}
+
+function completeDecision(idx) {
+  const c = reviewClauses[idx];
+  if (!c || !c.userDecision) return;
+  c.applied = true;
+  applyDecisionToDoc(idx, c.userDecision);
   renderClauses();
   updateProgress();
 }
