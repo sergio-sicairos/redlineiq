@@ -357,7 +357,8 @@ async function startReview() {
 PLAYBOOK:\n${playbookCtx||"None"}
 TEMPLATES:\n${tplCtx||"None"}
 
-Only flag genuine material differences. Include exact sectionRef for every clause.
+Only flag genuine material differences.
+The "sectionRef" field MUST be the full section number exactly as it appears in the document, including all subsection digits (e.g. "8.2.1" not "8" or "8.2"). Never truncate or round up a section number.
 The "found" field MUST be EXACT verbatim text from the document (first 1-2 sentences).
 
 Return JSON only:
