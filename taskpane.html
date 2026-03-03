@@ -10,94 +10,107 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: system-ui, -apple-system, sans-serif;
-      background: #0c0c0c; color: #e0e0e0;
+      background: #0c0c0c; color: #ffffff;
       font-size: 13px; height: 100vh;
       display: flex; flex-direction: column;
     }
     #header {
       background: #111111;
-      border-bottom: 1px solid #222222;
+      border-bottom: 1px solid #1e1e1e;
       padding: 12px 14px;
       display: flex; align-items: center; justify-content: space-between;
     }
-    #header .logo { display:flex; align-items:center; gap:8px; font-weight:700; font-size:15px; color:#e0e0e0; }
+    #header .logo { display:flex; align-items:center; gap:8px; font-weight:700; font-size:15px; color:#ffffff; }
     #main { flex:1; overflow-y:auto; padding:14px; }
     .btn {
       display:inline-flex; align-items:center; gap:6px;
       padding:9px 14px; border:none;
       font-size:12px; font-weight:600; cursor:pointer;
-      transition: opacity 0.15s;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
     }
-    .btn:disabled { opacity:0.35; cursor:not-allowed; }
-    .btn-primary { background:#5b0eff; color:#fff; }
-    .btn-primary:hover { opacity:0.85; }
-    .btn-secondary { background:#1a1a1a; color:#999999; border:1px solid #2a2a2a; }
-    .btn-secondary:hover { color:#e0e0e0; border-color:#444444; }
+    .btn:disabled { opacity:0.3; cursor:not-allowed; }
+    .btn-primary {
+      background: rgba(224,32,32,0.82);
+      border: 1px solid rgba(224,32,32,0.5);
+      color: #ffffff;
+    }
+    .btn-primary:hover { background: rgba(224,32,32,0.96); }
+    .btn-secondary {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #cccccc;
+    }
+    .btn-secondary:hover {
+      background: rgba(255,255,255,0.09);
+      border-color: rgba(255,255,255,0.22);
+      color: #ffffff;
+    }
     .btn-sm { padding:5px 10px; font-size:11px; }
     .btn-full { width:100%; justify-content:center; }
     .card {
       background:#111111;
-      border:1px solid #222222; padding:14px; margin-bottom:10px;
+      border:1px solid #1e1e1e; padding:14px; margin-bottom:10px;
     }
     .badge {
       display:inline-block; padding:2px 7px;
       font-size:10px; font-weight:600; white-space:nowrap;
     }
     .section-title {
-      font-size:10px; font-weight:700; color:#444444;
+      font-size:10px; font-weight:700; color:#555555;
       text-transform:uppercase; letter-spacing:0.08em; margin-bottom:8px;
     }
     .clause-card {
-      background:#111111; border:1px solid #222222;
+      background:#111111; border:1px solid #1e1e1e;
       padding:12px; margin-bottom:8px;
       border-left: 3px solid #2a2a2a;
     }
     .clause-card.accept    { border-left-color:#16a34a; }
     .clause-card.negotiate { border-left-color:#d97706; }
     .clause-card.reject    { border-left-color:#dc2626; }
-    .clause-card.flag      { border-left-color:#666666; }
+    .clause-card.flag      { border-left-color:#555555; }
     .decision-btns { display:flex; gap:4px; flex-wrap:wrap; margin-top:8px; }
     .decision-btn {
-      padding:4px 9px; font-size:11px; font-weight:600;
-      cursor:pointer; border:1px solid #2a2a2a;
-      background:#1a1a1a; color:#555555;
+      padding:4px 9px; font-size:11px; font-weight:600; cursor:pointer;
+      border:1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03); color:#777777;
     }
-    .decision-btn:hover { border-color:#444444; color:#cccccc; }
-    .decision-btn.active-accept    { border-color:#16a34a; background:#16a34a12; color:#16a34a; }
-    .decision-btn.active-negotiate { border-color:#d97706; background:#d9770612; color:#d97706; }
-    .decision-btn.active-reject    { border-color:#dc2626; background:#dc262612; color:#dc2626; }
-    .decision-btn.active-flag      { border-color:#555555; background:#55555512; color:#999999; }
+    .decision-btn:hover {
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.18); color:#ffffff;
+    }
+    .decision-btn.active-accept    { border-color:#16a34a; background:rgba(22,163,74,0.12); color:#16a34a; }
+    .decision-btn.active-negotiate { border-color:#d97706; background:rgba(217,119,6,0.12); color:#d97706; }
+    .decision-btn.active-reject    { border-color:#dc2626; background:rgba(220,38,38,0.12); color:#dc2626; }
+    .decision-btn.active-flag      { border-color:#555555; background:rgba(85,85,85,0.12);  color:#aaaaaa; }
     .insert-btn {
-      margin-top:6px; padding:4px 9px;
-      font-size:11px; font-weight:600; cursor:pointer;
-      border:1px solid #2a2a2a; background:#1a1a1a; color:#888888;
-      width:100%;
+      margin-top:6px; padding:4px 9px; font-size:11px; font-weight:600; cursor:pointer;
+      border:1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03); color:#888888; width:100%;
     }
-    .insert-btn:hover { color:#e0e0e0; border-color:#444444; }
-    .text-muted { color:#555555; }
+    .insert-btn:hover { background: rgba(255,255,255,0.08); color:#ffffff; border-color:rgba(255,255,255,0.18); }
+    .text-muted { color:#777777; }
     .text-sm { font-size:12px; }
     .text-xs { font-size:11px; }
-    label { font-size:11px; color:#555555; display:block; margin-bottom:4px; }
+    label { font-size:11px; color:#666666; display:block; margin-bottom:4px; }
     input, textarea {
       width:100%; padding:7px 10px;
-      border:1px solid #2a2a2a; background:#0c0c0c; color:#e0e0e0;
+      border:1px solid #2a2a2a; background:#0c0c0c; color:#ffffff;
       font-size:12px; margin-bottom:8px; outline:none;
     }
-    input:focus, textarea:focus { border-color:#5b0eff; }
+    input:focus, textarea:focus { border-color:#e02020; }
     textarea { resize:vertical; }
     .progress-bar {
       height:2px; background:#1e1e1e; overflow:hidden; margin-bottom:12px;
     }
     .progress-fill {
-      height:100%; background:#5b0eff;
-      transition:width 0.3s;
+      height:100%; background:#e02020; transition:width 0.3s;
     }
-    .risk-badge-low    { background:#16a34a12; color:#16a34a; border:1px solid #16a34a30; }
-    .risk-badge-medium { background:#d9770612; color:#d97706; border:1px solid #d9770630; }
-    .risk-badge-high   { background:#dc262612; color:#dc2626; border:1px solid #dc262630; }
+    .risk-badge-low    { background:rgba(22,163,74,0.12);  color:#16a34a; border:1px solid rgba(22,163,74,0.3); }
+    .risk-badge-medium { background:rgba(217,119,6,0.12);  color:#d97706; border:1px solid rgba(217,119,6,0.3); }
+    .risk-badge-high   { background:rgba(220,38,38,0.12);  color:#dc2626; border:1px solid rgba(220,38,38,0.3); }
     .spinner {
       width:20px; height:20px; border:2px solid #222222;
-      border-top-color:#5b0eff; border-radius:50%;
+      border-top-color:#e02020; border-radius:50%;
       animation:spin 0.7s linear infinite; display:inline-block;
     }
     @keyframes spin { to { transform:rotate(360deg); } }
@@ -106,68 +119,67 @@
       align-items:center; justify-content:center; gap:12px; padding:20px;
     }
     #step-indicator {
-      font-size:11px; color:#444444; text-align:center; padding:0 8px;
+      font-size:11px; color:#666666; text-align:center; padding:0 8px;
     }
     .summary-box {
       background:#0c0c0c; border:1px solid #1e1e1e; padding:12px;
-      font-size:12px; color:#999999; line-height:1.6; margin-bottom:10px;
+      font-size:12px; color:#cccccc; line-height:1.6; margin-bottom:10px;
     }
     .critical-item {
       font-size:12px; color:#dc2626; padding:5px 0;
       border-bottom:1px solid #1e1e1e;
     }
     .footer {
-      padding:10px 14px; border-top:1px solid #1e1e1e;
-      display:flex; gap:6px;
+      padding:10px 14px; border-top:1px solid #1e1e1e; display:flex; gap:6px;
     }
     #sync-status {
       font-size:10px; padding:3px 8px;
-      background:#1a1a1a; color:#555555; border:1px solid #2a2a2a;
+      background:rgba(255,255,255,0.04); color:#777777; border:1px solid rgba(255,255,255,0.08);
     }
     .settings-icon {
-      background: none; border: none; color: #444444;
+      background: none; border: none; color: #555555;
       cursor: pointer; font-size: 15px; padding: 2px 4px;
     }
-    .settings-icon:hover { color: #e0e0e0; }
+    .settings-icon:hover { color: #ffffff; }
     /* ── Tabs ── */
     #tab-bar {
       display: none;
       background: #111111;
-      border-bottom: 1px solid #222222;
-      padding: 0 14px;
-      gap: 0;
+      border-bottom: 1px solid #1e1e1e;
+      padding: 0 14px; gap: 0;
     }
     .tab-btn {
       background: none; border: none; border-bottom: 2px solid transparent;
       padding: 10px 14px; font-size: 12px; font-weight: 600;
-      color: #444444; cursor: pointer; transition: color 0.15s;
+      color: #555555; cursor: pointer; transition: color 0.15s;
     }
-    .tab-btn:hover { color: #aaaaaa; }
-    .tab-btn.active { color: #e0e0e0; border-bottom-color: #5b0eff; }
+    .tab-btn:hover { color: #cccccc; }
+    .tab-btn.active { color: #ffffff; border-bottom-color: #e02020; }
     /* ── Upload tab ── */
     .category-pills { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
     .pill {
-      padding:5px 12px; font-size:11px; font-weight:600;
-      cursor:pointer; border:1px solid #2a2a2a; background:#111111; color:#555555;
+      padding:5px 12px; font-size:11px; font-weight:600; cursor:pointer;
+      border:1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03); color:#777777;
       transition: all 0.15s;
     }
-    .pill:hover { border-color:#444444; color:#aaaaaa; }
-    .pill.active { border-color:#555555; background:#1e1e1e; color:#e0e0e0; }
+    .pill:hover { border-color:rgba(255,255,255,0.18); color:#cccccc; }
+    .pill.active { border-color:rgba(255,255,255,0.28); background:rgba(255,255,255,0.08); color:#ffffff; }
     .upload-drop {
       border:1px dashed #2a2a2a; padding:24px;
       text-align:center; cursor:pointer; transition:border-color 0.15s;
       background:#0c0c0c;
     }
-    .upload-drop:hover { border-color:#5b0eff; }
+    .upload-drop:hover { border-color:#e02020; }
     .upload-drop input[type=file] { display:none; }
     /* ── Resources tab ── */
     .stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
     .stat-card {
-      background:#111111; border:1px solid #222222;
+      background:#111111; border:1px solid #1e1e1e;
       padding:12px; text-align:center;
     }
-    .stat-card .stat-num { font-size:22px; font-weight:700; color:#e0e0e0; }
-    .stat-card .stat-label { font-size:10px; color:#444444; margin-top:2px; }
+    .stat-card .stat-num { font-size:22px; font-weight:700; color:#ffffff; }
+    .stat-card .stat-label { font-size:10px; color:#555555; margin-top:2px; }
     .resource-row {
       display:flex; align-items:center; justify-content:space-between;
       padding:8px 0; border-bottom:1px solid #1e1e1e; font-size:11px;
@@ -175,7 +187,7 @@
     .resource-row:last-child { border-bottom:none; }
     .type-tag {
       font-size:10px; font-weight:600; padding:2px 7px;
-      background:#1a1a1a; color:#555555; border:1px solid #2a2a2a;
+      background:rgba(255,255,255,0.05); color:#888888; border:1px solid rgba(255,255,255,0.1);
     }
   </style>
 </head>
@@ -184,7 +196,7 @@
 <div id="header">
   <div class="logo">
     <img src="https://raw.githubusercontent.com/sergio-sicairos/redlineiq/main/icon80.png" style="width:26px;height:26px;object-fit:cover;" />
-    <span><span style="color:#e0e0e0">Py</span><span style="color:#e02020">line</span></span>
+    <span><span style="color:#ffffff">Py</span><span style="color:#e02020">line</span></span>
   </div>
   <button class="settings-icon" onclick="toggleSettings()" title="Settings">⚙</button>
 </div>
@@ -197,7 +209,7 @@
 
 <!-- Settings panel -->
 <div id="view-settings" style="display:none; padding:14px;">
-  <div style="font-weight:600; margin-bottom:12px; color:#e0e0e0;">Settings</div>
+  <div style="font-weight:600; margin-bottom:12px; color:#ffffff;">Settings</div>
 
   <div class="card">
     <div class="section-title">Anthropic API Key</div>
@@ -253,8 +265,8 @@
   <!-- Idle state -->
   <div id="view-idle">
     <div class="card" style="text-align:center; padding:24px;">
-      <div style="font-size:22px;margin-bottom:8px;color:#5b0eff;">⚡</div>
-      <div style="font-weight:600;margin-bottom:4px;color:#e0e0e0;">Ready to Review</div>
+      <div style="font-size:22px;margin-bottom:8px;color:#e02020;">⚡</div>
+      <div style="font-weight:600;margin-bottom:4px;color:#ffffff;">Ready to Review</div>
       <div class="text-muted text-xs" style="margin-bottom:14px;">
         Reads the open Word document and reviews it against your shared playbook on Google Drive.
       </div>
@@ -272,7 +284,7 @@
   <div id="view-reviewing" style="display:none">
     <div class="card" style="text-align:center;padding:28px;">
       <div class="spinner" style="width:32px;height:32px;margin:0 auto 12px;"></div>
-      <div style="font-weight:600;margin-bottom:6px;color:#e0e0e0;">Analyzing Document</div>
+      <div style="font-weight:600;margin-bottom:6px;color:#ffffff;">Analyzing Document</div>
       <div id="review-step" class="text-muted text-xs">Reading document text…</div>
     </div>
   </div>
@@ -280,7 +292,7 @@
   <!-- Results state -->
   <div id="view-results" style="display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-      <div style="font-weight:600;font-size:14px;color:#e0e0e0;">Review Results</div>
+      <div style="font-weight:600;font-size:14px;color:#ffffff;">Review Results</div>
       <button class="btn btn-secondary btn-sm" onclick="resetToIdle()">← New Review</button>
     </div>
 
@@ -302,7 +314,7 @@
     <!-- Progress -->
     <div id="progress-section">
       <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
-        <span class="text-xs" style="color:#555555;">Clause Decisions</span>
+        <span class="text-xs" style="color:#777777;">Clause Decisions</span>
         <button class="btn btn-secondary btn-sm" onclick="acceptAll()">Accept All AI</button>
       </div>
       <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
@@ -344,10 +356,10 @@
     </div>
 
     <div class="upload-drop" onclick="document.getElementById('upload-file-input').click()">
-      <div style="font-size:22px;margin-bottom:8px;color:#444444;">☁</div>
-      <div style="font-weight:600;font-size:12px;margin-bottom:4px;color:#aaaaaa;">Click to choose a file</div>
+      <div style="font-size:22px;margin-bottom:8px;color:#555555;">☁</div>
+      <div style="font-weight:600;font-size:12px;margin-bottom:4px;color:#cccccc;">Click to choose a file</div>
       <div class="text-muted text-xs">PDF, DOCX, or TXT</div>
-      <div id="upload-filename" style="margin-top:8px;font-size:11px;color:#e0e0e0;font-weight:600;"></div>
+      <div id="upload-filename" style="margin-top:8px;font-size:11px;color:#ffffff;font-weight:600;"></div>
       <input type="file" id="upload-file-input" accept=".pdf,.docx,.doc,.txt"
         onchange="document.getElementById('upload-filename').textContent = this.files[0]?.name || ''" />
     </div>
@@ -378,7 +390,7 @@
 
   <div id="resources-empty" style="display:none;text-align:center;padding:30px;">
     <div style="font-size:28px;margin-bottom:8px;">📂</div>
-    <div style="font-weight:600;margin-bottom:4px;color:#e0e0e0;">No documents yet</div>
+    <div style="font-weight:600;margin-bottom:4px;color:#ffffff;">No documents yet</div>
     <div class="text-muted text-xs">Upload documents in the Upload tab to see them here.</div>
   </div>
 
@@ -564,11 +576,11 @@ function setDriveBanner(state, msg) {
   if (state === "not-connected") {
     const hasId = !!getClientId();
     const label = hasId ? "Reconnect" : "Connect →";
-    el.innerHTML = `<span>⚠ Drive session expired — using default playbook.</span> <button onclick="retryDrive()" style="margin-left:8px;padding:2px 8px;border:1px solid #d97706;background:transparent;color:#d97706;font-size:10px;cursor:pointer;">${label}</button>`;
-    el.style.background = "#1a1200"; el.style.color = "#d97706"; el.style.borderColor = "#332200";
+    el.innerHTML = `<span>⚠ Drive session expired — using default playbook.</span> <button onclick="retryDrive()" style="margin-left:8px;padding:2px 8px;border:1px solid rgba(217,119,6,0.5);background:rgba(217,119,6,0.15);color:#d97706;font-size:10px;cursor:pointer;">${label}</button>`;
+    el.style.background = "rgba(217,119,6,0.08)"; el.style.color = "#d97706"; el.style.borderColor = "rgba(217,119,6,0.2)";
   } else {
-    el.innerHTML = `<span>⚠ Drive failed to load — using default playbook.</span> <button onclick="retryDrive()" style="margin-left:8px;padding:2px 8px;border:1px solid #dc2626;background:transparent;color:#dc2626;font-size:10px;cursor:pointer;">Retry</button>`;
-    el.style.background = "#1a0000"; el.style.color = "#dc2626"; el.style.borderColor = "#330000";
+    el.innerHTML = `<span>⚠ Drive failed to load — using default playbook.</span> <button onclick="retryDrive()" style="margin-left:8px;padding:2px 8px;border:1px solid rgba(220,38,38,0.5);background:rgba(220,38,38,0.15);color:#dc2626;font-size:10px;cursor:pointer;">Retry</button>`;
+    el.style.background = "rgba(220,38,38,0.08)"; el.style.color = "#dc2626"; el.style.borderColor = "rgba(220,38,38,0.2)";
   }
 }
 
@@ -773,23 +785,23 @@ function renderClauses() {
     <div class="clause-card ${dec}" id="clause-${i}">
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px;">
         ${c.category==="Comment"
-          ? `<span class="badge" style="background:#1a1a1a;color:#aaaaaa;border:1px solid #333333">💬 Comment</span>`
-          : `<span class="badge" style="background:#1a1a1a;color:#888888;border:1px solid #2a2a2a">${safeStr(c.category)}</span>`
+          ? `<span class="badge" style="background:rgba(255,255,255,0.07);color:#cccccc;border:1px solid rgba(255,255,255,0.15)">💬 Comment</span>`
+          : `<span class="badge" style="background:rgba(255,255,255,0.05);color:#aaaaaa;border:1px solid rgba(255,255,255,0.1)">${safeStr(c.category)}</span>`
         }
-        ${c.sectionRef?`<span class="badge" style="background:#1a1a1a;color:#666666;border:1px solid #2a2a2a">§ ${safeStr(c.sectionRef)}</span>`:""}
-        <span class="badge" style="background:#1a1a1a;color:#555555;border:1px solid #2a2a2a">AI: ${safeStr(c.recommendation)}</span>
+        ${c.sectionRef?`<span class="badge" style="background:rgba(255,255,255,0.04);color:#888888;border:1px solid rgba(255,255,255,0.08)">§ ${safeStr(c.sectionRef)}</span>`:""}
+        <span class="badge" style="background:rgba(255,255,255,0.03);color:#666666;border:1px solid rgba(255,255,255,0.07)">AI: ${safeStr(c.recommendation)}</span>
       </div>
-      <div style="font-size:11px;color:#555555;margin-bottom:4px;cursor:pointer;"
+      <div style="font-size:11px;color:#777777;margin-bottom:4px;cursor:pointer;"
         onclick="navigateToClause(${i})"
         title="Click to jump to this location in the document">
-        <strong style="color:#aaaaaa">Found:</strong> ${safeStr(c.found).slice(0,120)}…
-        <span style="color:#5b0eff;font-size:10px;margin-left:4px;">↗ jump</span>
+        <strong style="color:#cccccc">Found:</strong> ${safeStr(c.found).slice(0,120)}…
+        <span style="color:#e02020;font-size:10px;margin-left:4px;">↗ jump</span>
       </div>
       ${c.deviationFromTemplate?`<div style="font-size:11px;color:#d97706;margin-bottom:4px;">⚠ ${safeStr(c.deviationFromTemplate).slice(0,100)}</div>`:""}
-      <div style="font-size:11px;color:#777777;line-height:1.5;margin-bottom:6px;">${safeStr(c.reasoning).slice(0,150)}</div>
+      <div style="font-size:11px;color:#cccccc;line-height:1.5;margin-bottom:6px;">${safeStr(c.reasoning).slice(0,150)}</div>
       ${c.suggestedLanguage?`
-        <div style="font-size:11px;color:#999999;background:#141414;padding:7px;margin-bottom:6px;line-height:1.4;border:1px solid #2a2a2a;border-left:2px solid #5b0eff;">
-          <strong style="color:#e0e0e0">Suggested:</strong> ${safeStr(c.suggestedLanguage).slice(0,160)}
+        <div style="font-size:11px;color:#cccccc;background:rgba(255,255,255,0.03);padding:7px;margin-bottom:6px;line-height:1.4;border:1px solid rgba(255,255,255,0.08);border-left:2px solid #e02020;">
+          <strong style="color:#ffffff">Suggested:</strong> ${safeStr(c.suggestedLanguage).slice(0,160)}
         </div>
       `:""}
       <div class="decision-btns">
@@ -799,11 +811,11 @@ function renderClauses() {
         `).join("")}
       </div>
       ${c.userDecision && !c.applied ? `
-        <button onclick="completeDecision(${i})" style="margin-top:8px;width:100%;padding:7px;border:none;background:#5b0eff;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">
+        <button onclick="completeDecision(${i})" style="margin-top:8px;width:100%;padding:7px;border:1px solid rgba(224,32,32,0.5);background:rgba(224,32,32,0.82);color:#fff;font-size:12px;font-weight:600;cursor:pointer;">
           Complete
         </button>
       ` : ""}
-      ${c.applied ? `<div style="font-size:10px;color:#444444;margin-top:6px;">✓ Applied to document</div>` : ""}
+      ${c.applied ? `<div style="font-size:10px;color:#555555;margin-top:6px;">✓ Applied to document</div>` : ""}
     </div>`;
   }).join("");
 }
