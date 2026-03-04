@@ -412,37 +412,37 @@ let uploadCategory = "templates";
 let uploadType = "MSA";
 
 // ── API Key ───────────────────────────────────────────────────────────────────
-function getApiKey() { return localStorage.getItem("redlineiq_api_key") || ""; }
-function saveApiKey() {
+async function getApiKey() { return (await OfficeRuntime.storage.getItem("redlineiq_api_key")) || ""; }
+async function saveApiKey() {
   const val = document.getElementById("api-key-input").value.trim();
   if (!val.startsWith("sk-ant-")) {
     document.getElementById("key-status").innerHTML = '<span style="color:#ef4444">That doesn\'t look like a valid key.</span>';
     return;
   }
-  localStorage.setItem("redlineiq_api_key", val);
+  await OfficeRuntime.storage.setItem("redlineiq_api_key", val);
   document.getElementById("key-status").innerHTML = '<span style="color:#22c55e">✓ Key saved.</span>';
 }
 
 // ── Google Drive OAuth ────────────────────────────────────────────────────────
-function getClientId()   { return localStorage.getItem("redlineiq_gclient_id") || ""; }
+async function getClientId() { return (await OfficeRuntime.storage.getItem("redlineiq_gclient_id")) || ""; }
 function getDriveToken() { return localStorage.getItem("redlineiq_drive_token") || ""; }
 function driveTokenValid() {
   const expiry = parseInt(localStorage.getItem("redlineiq_drive_expiry") || "0");
   return getDriveToken() && Date.now() < expiry - 60000;
 }
 
-function saveAndConnectDrive() {
+async function saveAndConnectDrive() {
   const val = document.getElementById("gclient-input").value.trim();
   if (!val.includes("googleusercontent.com")) {
     document.getElementById("drive-status").innerHTML = '<span style="color:#ef4444">That doesn\'t look like a valid Client ID.</span>';
     return;
   }
-  localStorage.setItem("redlineiq_gclient_id", val);
+  await OfficeRuntime.storage.setItem("redlineiq_gclient_id", val);
   connectDrive();
 }
 
-function connectDrive() {
-  const clientId = getClientId();
+async function connectDrive() {
+  const clientId = await getClientId();
   if (!clientId) return;
   try {
     const client = google.accounts.oauth2.initTokenClient({
@@ -474,7 +474,7 @@ function connectDrive() {
 
 async function ensureDriveToken() {
   if (driveTokenValid()) return getDriveToken();
-  const clientId = getClientId();
+  const clientId = await getClientId();
   if (!clientId) throw new Error("No Google Client ID in settings.");
   // Try silent refresh with a 5-second timeout — if GIS doesn't respond, fail fast
   return Promise.race([
@@ -499,7 +499,7 @@ async function ensureDriveToken() {
   ]);
 }
 
-function toggleSettings() {
+async function toggleSettings() {
   const s = document.getElementById("view-settings");
   const m = document.getElementById("main");
   const l = document.getElementById("loading-screen");
@@ -507,10 +507,10 @@ function toggleSettings() {
     s.style.display = "block";
     m.style.display = "none";
     l.style.display = "none";
-    const k = getApiKey();
+    const k = await getApiKey();
     document.getElementById("api-key-input").value = k ? "••••••••••••••••" : "";
     document.getElementById("key-status").textContent = k ? "A key is already saved." : "";
-    const cid = getClientId();
+    const cid = await getClientId();
     document.getElementById("gclient-input").value = cid ? "••••••••••••••••" : "";
     document.getElementById("drive-status").textContent = driveTokenValid() ? "✓ Drive connected." : cid ? "Token expired — reconnect." : "";
     const ind = document.getElementById("drive-indicator");
@@ -535,7 +535,7 @@ Office.onReady(async (info) => {
   // Show UI immediately — never block on Drive
   document.getElementById("loading-screen").style.display = "none";
   document.getElementById("tab-bar").style.display = "flex";
-  if (!getApiKey()) {
+  if (!await getApiKey()) {
     document.getElementById("view-settings").style.display = "block";
     document.getElementById("key-status").innerHTML = '<span style="color:#f59e0b">Please enter your API key to get started.</span>';
   } else {
@@ -547,7 +547,7 @@ Office.onReady(async (info) => {
 });
 
 async function bootLoadDrive() {
-  const clientId = getClientId();
+  const clientId = await getClientId();
   if (!clientId) {
     playbook = { clauses: getDefaults(), contracts: [], outcomes: [] };
     renderPlaybookSummary();
@@ -569,13 +569,13 @@ async function bootLoadDrive() {
   }
 }
 
-function setDriveBanner(state, msg) {
+async function setDriveBanner(state, msg) {
   const el = document.getElementById("drive-banner");
   if (!el) return;
   if (state === "ok") { el.style.display = "none"; return; }
   el.style.display = "block";
   if (state === "not-connected") {
-    const hasId = !!getClientId();
+    const hasId = !!(await getClientId());
     const label = hasId ? "Reconnect" : "Connect →";
     el.innerHTML = `<span>⚠ Drive session expired — using default playbook.</span> <button onclick="retryDrive()" style="margin-left:8px;padding:2px 8px;border:1px solid rgba(217,119,6,0.5);background:rgba(217,119,6,0.15);color:#d97706;font-size:10px;cursor:pointer;">${label}</button>`;
     el.style.background = "rgba(217,119,6,0.08)"; el.style.color = "#d97706"; el.style.borderColor = "rgba(217,119,6,0.2)";
@@ -1092,7 +1092,7 @@ async function driveWriteFile(token, folderId, filename, data) {
 
 // ── Claude API calls ──────────────────────────────────────────────────────────
 async function callClaude(system, user, maxTokens = 4096) {
-  const key = getApiKey();
+  const key = await getApiKey();
   if (!key) throw new Error("No API key set. Click ⚙ to add your Anthropic key.");
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
