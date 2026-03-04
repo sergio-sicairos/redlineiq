@@ -1430,6 +1430,7 @@ function selectCategory(el, cat) {
   document.getElementById("position-entry-section").style.display = isPos ? "block" : "none";
   document.getElementById("type-pills").style.display            = isPos ? "none"  : "flex";
   document.getElementById("contract-text-section").style.display = (cat === "completed") ? "block" : "none";
+  document.getElementById("upload-btn").textContent = (cat === "completed") ? "Save to Drive" : "Upload to Drive";
   document.querySelectorAll("[data-cat]").forEach(p => p.classList.remove("active"));
   el.classList.add("active");
 }
@@ -1442,25 +1443,42 @@ function selectType(el, type) {
 async function uploadDocument() {
   const fileInput = document.getElementById("upload-file-input");
   const file = fileInput.files[0];
-  if (!file) { alert("Please select a file first."); return; }
+  const contractText = uploadCategory === "completed" ? document.getElementById("contract-text-input").value.trim() : "";
+
+  // For completed docs, a file is optional — text alone is enough
+  if (uploadCategory !== "completed" && !file) { alert("Please select a file first."); return; }
+  if (uploadCategory === "completed" && !file && !contractText) { alert("Please paste contract text or select a file."); return; }
+
   const btn = document.getElementById("upload-btn");
   const status = document.getElementById("upload-status");
-  btn.disabled = true; btn.textContent = "Uploading…";
+  btn.disabled = true; btn.textContent = "Saving…";
   status.textContent = "";
   try {
     const token = await ensureDriveToken();
     const folderId = await driveFindOrCreateFolder(token, FOLDER);
-    const fileId = await driveUploadFile(token, folderId, file);
     const resources = await driveReadFile(token, folderId, "resources.json") || [];
-    const contractText = uploadCategory === "completed" ? (document.getElementById("contract-text-input").value.trim()) : "";
-    resources.push({ id: fileId, name: file.name, category: uploadCategory, type: uploadType, size: file.size, uploadedAt: new Date().toISOString(), text: contractText });
+
+    let fileId = null;
+    let fileName = file ? file.name : ("contract-" + Date.now() + ".txt");
+    if (file) {
+      fileId = await driveUploadFile(token, folderId, file);
+    } else {
+      // Text-only: save as a plain text file in Drive
+      const blob = new Blob([contractText], { type: "text/plain" });
+      const textFile = new File([blob], fileName, { type: "text/plain" });
+      fileId = await driveUploadFile(token, folderId, textFile);
+    }
+
+    resources.push({ id: fileId, name: fileName, category: uploadCategory, type: uploadType, size: file ? file.size : contractText.length, uploadedAt: new Date().toISOString(), text: contractText });
     await driveWriteFile(token, folderId, "resources.json", resources);
-    status.innerHTML = `<span style="color:#16a34a">✓ Uploaded "${file.name}"</span>`;
-    btn.textContent = "Upload to Drive"; btn.disabled = false;
-    fileInput.value = ""; document.getElementById("upload-filename").textContent = ""; document.getElementById("contract-text-input").value = "";
+    playbook.contracts = resources;
+    status.innerHTML = `<span style="color:#16a34a">✓ Saved "${fileName}"</span>`;
+    btn.textContent = "Save to Drive"; btn.disabled = false;
+    fileInput.value = ""; document.getElementById("upload-filename").textContent = "";
+    document.getElementById("contract-text-input").value = "";
   } catch(e) {
-    status.innerHTML = `<span style="color:#dc2626">Upload failed: ${e.message}</span>`;
-    btn.textContent = "Upload to Drive"; btn.disabled = false;
+    status.innerHTML = `<span style="color:#dc2626">Failed: ${e.message}</span>`;
+    btn.textContent = "Save to Drive"; btn.disabled = false;
   }
 }
 
