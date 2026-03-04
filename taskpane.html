@@ -750,7 +750,7 @@ function renderPlaybookSummary() {
       <span class="badge" style="margin-right:4px;margin-bottom:4px;background:${p==='accept'?'#22c55e22':p==='negotiate'?'#f59e0b22':'#ef444422'};color:${p==='accept'?'#22c55e':p==='negotiate'?'#f59e0b':'#ef4444'};border:1px solid ${p==='accept'?'#22c55e44':p==='negotiate'?'#f59e0b44':'#ef444444'}">
         ${n} ${p}
       </span>`).join("")}
-    <div style="margin-top:6px;color:#9ca3af">${playbook.contracts?.filter(c=>c.docRole==='template').length||0} templates · ${playbook.contracts?.filter(c=>c.docRole==='negotiated').length||0} precedents</div>
+    <div style="margin-top:6px;color:#9ca3af">${playbook.contracts?.filter(c=>c.category==='templates').length||0} templates · ${playbook.contracts?.filter(c=>c.category==='completed').length||0} completed deals</div>
   `;
 }
 
@@ -780,10 +780,14 @@ async function startReview() {
       `[${c.category}]\n  Standard: ${anonymizeForAI(c.standardLang||"").slice(0,300)}${c.fallbackLang?`\n  Fallback: ${anonymizeForAI(c.fallbackLang).slice(0,200)}`:""}${c.hardLimit?`\n  Hard Limit (never accept): ${anonymizeForAI(c.hardLimit)}`:""}${c.notes?`\n  Notes: ${anonymizeForAI(c.notes)}`:""}`
     ).join("\n\n");
 
-    const matchingTemplates = (playbook.contracts||[]).filter(c =>
-      c.category === "templates" &&
-      (c.type === reviewDocType || (c.name||"").toUpperCase().includes(reviewDocType))
-    );
+    const equivTypes = getEquivalentTypes(reviewDocType);
+    const matchingTemplates = (playbook.contracts||[]).filter(c => {
+      if (c.category !== "templates") return false;
+      const cType = (c.type||"").toUpperCase();
+      const cName = (c.name||"").toUpperCase();
+      return equivTypes.some(t => cType === t || cType.includes(t) || t.includes(cType))
+          || equivTypes.some(t => cName.includes(t));
+    });
     const tplCtx = matchingTemplates
       .map(c=>`[TEMPLATE ${reviewDocType}] ${c.name}:\n${(c.text||"").slice(0,30000)}`).join("\n\n");
 
@@ -1309,14 +1313,14 @@ async function saveOutcomes() {
 async function loadFromDrive() {
   const token = await ensureDriveToken();
   const folderId = await driveFindOrCreateFolder(token, FOLDER);
-  const [pb, co, ou] = await Promise.all([
+  const [pb, re, ou] = await Promise.all([
     driveReadFile(token, folderId, "playbook.json"),
-    driveReadFile(token, folderId, "contracts.json"),
+    driveReadFile(token, folderId, "resources.json"),
     driveReadFile(token, folderId, "outcomes.json"),
   ]);
   return {
     clauses:   Array.isArray(pb) ? pb : getDefaults(),
-    contracts: Array.isArray(co) ? co : [],
+    contracts: Array.isArray(re) ? re : [],
     outcomes:  Array.isArray(ou) ? ou : [],
   };
 }
@@ -1922,6 +1926,19 @@ async function restorePosition(entry) {
 function closePositionHistory() {
   document.getElementById("view-position-history").style.display = "none";
   document.getElementById("tab-resources").style.display = "block";
+}
+
+// ── Doc type equivalency (MSA = Terms of Service, MNDA = NDA, etc.) ──────────
+function getEquivalentTypes(docType) {
+  const upper = docType.toUpperCase();
+  const groups = [
+    ["MSA","TOS","T&C","TERMS OF SERVICE","TERMS AND CONDITIONS","TERMS & CONDITIONS",
+     "MASTER SERVICE AGREEMENT","MASTER SERVICES AGREEMENT","SERVICES AGREEMENT","SERVICE AGREEMENT"],
+    ["DPA","DATA PROCESSING AGREEMENT","DATA PROCESSING ADDENDUM","DATA PROTECTION AGREEMENT","DATA PROTECTION ADDENDUM"],
+    ["MNDA","NDA","NON-DISCLOSURE AGREEMENT","MUTUAL NDA","MUTUAL NON-DISCLOSURE","MUTUAL NON-DISCLOSURE AGREEMENT","CONFIDENTIALITY AGREEMENT"],
+    ["SOW","STATEMENT OF WORK","WORK ORDER"],
+  ];
+  return groups.find(g => g.some(t => upper === t || upper.includes(t) || t.includes(upper))) || [upper];
 }
 
 // ── Anonymize text before sending to AI ──────────────────────────────────────
