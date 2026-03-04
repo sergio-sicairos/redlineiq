@@ -418,6 +418,12 @@
       <button class="btn btn-primary btn-full" onclick="savePosition()">Save Position</button>
     </div>
 
+    <!-- Contract text (shown for Completed Docs) -->
+    <div id="contract-text-section" style="display:none">
+      <div class="section-title" style="margin-top:4px;">Contract Text</div>
+      <textarea id="contract-text-input" rows="8" placeholder="Paste the full contract text here. This is used to distill positions from your deal history."></textarea>
+    </div>
+
     <div id="upload-status" style="margin-top:8px;font-size:11px;"></div>
   </div>
 
@@ -439,6 +445,13 @@
     </div>
   </div>
 
+  <div class="card" style="margin-bottom:10px;">
+    <div class="section-title">AI Position Distillation</div>
+    <div class="text-xs text-muted" style="margin-bottom:10px;line-height:1.5;">Analyze your completed deal history and automatically generate positions for each clause category. Review and approve before saving.</div>
+    <button class="btn btn-primary btn-full" onclick="distillPositions()">Distill Positions from History</button>
+    <div id="distill-status" style="margin-top:8px;font-size:11px;"></div>
+  </div>
+
   <div id="resources-empty" style="display:none;text-align:center;padding:30px;">
     <div style="font-size:28px;margin-bottom:8px;">📂</div>
     <div style="font-weight:600;margin-bottom:4px;color:#ffffff;">No documents yet</div>
@@ -446,6 +459,19 @@
   </div>
 
 </div> <!-- end tab-resources -->
+
+<!-- ═══ DISTILL RESULTS VIEW ═══ -->
+<div id="view-distill" style="display:none; padding:14px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+    <div style="font-weight:700;font-size:14px;color:#ffffff;">Derived Positions</div>
+    <div style="display:flex;gap:6px;">
+      <button class="btn btn-secondary btn-sm" onclick="closeDistill()">Back</button>
+      <button class="btn btn-primary btn-sm" onclick="saveAllDistilled()">Save All</button>
+    </div>
+  </div>
+  <div class="text-xs text-muted" style="margin-bottom:12px;">Review each position below. Edit any field before saving. Saving replaces existing positions in your playbook.</div>
+  <div id="distill-cards"></div>
+</div>
 
 </div> <!-- end #main -->
 
@@ -1403,6 +1429,7 @@ function selectCategory(el, cat) {
   document.getElementById("file-upload-section").style.display   = isPos ? "none"  : "block";
   document.getElementById("position-entry-section").style.display = isPos ? "block" : "none";
   document.getElementById("type-pills").style.display            = isPos ? "none"  : "flex";
+  document.getElementById("contract-text-section").style.display = (cat === "completed") ? "block" : "none";
   document.querySelectorAll("[data-cat]").forEach(p => p.classList.remove("active"));
   el.classList.add("active");
 }
@@ -1425,11 +1452,12 @@ async function uploadDocument() {
     const folderId = await driveFindOrCreateFolder(token, FOLDER);
     const fileId = await driveUploadFile(token, folderId, file);
     const resources = await driveReadFile(token, folderId, "resources.json") || [];
-    resources.push({ id: fileId, name: file.name, category: uploadCategory, type: uploadType, size: file.size, uploadedAt: new Date().toISOString() });
+    const contractText = uploadCategory === "completed" ? (document.getElementById("contract-text-input").value.trim()) : "";
+    resources.push({ id: fileId, name: file.name, category: uploadCategory, type: uploadType, size: file.size, uploadedAt: new Date().toISOString(), text: contractText });
     await driveWriteFile(token, folderId, "resources.json", resources);
     status.innerHTML = `<span style="color:#16a34a">✓ Uploaded "${file.name}"</span>`;
     btn.textContent = "Upload to Drive"; btn.disabled = false;
-    fileInput.value = ""; document.getElementById("upload-filename").textContent = "";
+    fileInput.value = ""; document.getElementById("upload-filename").textContent = ""; document.getElementById("contract-text-input").value = "";
   } catch(e) {
     status.innerHTML = `<span style="color:#dc2626">Upload failed: ${e.message}</span>`;
     btn.textContent = "Upload to Drive"; btn.disabled = false;
@@ -1590,6 +1618,109 @@ function navigateToClause(idx) {
     range.select();
     await context.sync();
   }).catch(e => console.warn("Could not navigate:", e.message));
+}
+
+// ── Position Distillation ─────────────────────────────────────────────────────
+async function distillPositions() {
+  const status = document.getElementById("distill-status");
+  const resources = playbook.contracts || [];
+  const completed = resources.filter(r => r.category === "completed" && r.text && r.text.trim().length > 50);
+
+  if (!completed.length) {
+    status.innerHTML = '<span style="color:#ef4444">No completed contracts with text found. Upload completed docs and paste their text first.</span>';
+    return;
+  }
+
+  status.innerHTML = '<span style="color:#888">Analyzing ' + completed.length + ' contract' + (completed.length > 1 ? 's' : '') + '…</span>';
+
+  const contractsCtx = completed.map((c, i) =>
+    `--- CONTRACT ${i + 1}: ${c.name} (${c.type || "Unknown type"}) ---\n${c.text.slice(0, 8000)}`
+  ).join("\n\n");
+
+  const sys = `You are a contract position analyst. Analyze the historical contracts provided and derive our company's standard positions for each clause category.
+
+For each category, determine:
+- standardLang: The language we prefer and push for in negotiations
+- fallbackLang: The minimum we have accepted under pressure (our floor)
+- hardLimit: What we absolutely never accept
+- notes: Key conditions, context, or deal-size thresholds that affect leniency
+
+Base ONLY on the provided contracts. Do not invent positions. If a category has no evidence, set all fields to empty string.
+
+Categories to derive positions for:
+Limitation of Liability, Indemnification, Confidentiality, Data Privacy / DPA, Termination, IP / Ownership, Warranty, Insurance, Payment Terms, Governing Law, Non-Solicitation, Force Majeure, Assignment, Audit Rights, SLA / Uptime
+
+Return JSON only:
+{"positions":[{"category":"","standardLang":"","fallbackLang":"","hardLimit":"","notes":""}]}`;
+
+  const userMsg = `Analyze these ${completed.length} historical contracts and derive our positions:\n\n${contractsCtx}`;
+
+  try {
+    const raw = await callClaude(sys, userMsg, 8000);
+    const result = repairJSON(raw);
+    if (!result.positions || !result.positions.length) throw new Error("No positions returned.");
+    status.innerHTML = '<span style="color:#22c55e">✓ Done. Review and save below.</span>';
+    renderDistillResults(result.positions);
+    // Show distill view
+    document.getElementById("tab-resources").style.display = "none";
+    document.getElementById("view-distill").style.display = "block";
+  } catch(e) {
+    status.innerHTML = `<span style="color:#ef4444">Error: ${e.message}</span>`;
+  }
+}
+
+let distilledPositions = [];
+
+function renderDistillResults(positions) {
+  distilledPositions = positions;
+  document.getElementById("distill-cards").innerHTML = positions.map((p, i) => `
+    <div class="card" id="dcard-${i}" style="margin-bottom:10px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="font-weight:700;color:#ffffff;font-size:13px;">${safeStr(p.category)}</div>
+        <button class="btn btn-primary btn-sm" onclick="saveDistilledPosition(${i})">Save</button>
+      </div>
+      <label>Standard Language (our preference)</label>
+      <textarea id="dp-std-${i}" rows="3" style="margin-bottom:6px;">${safeStr(p.standardLang)}</textarea>
+      <label>Fallback Language (our floor)</label>
+      <textarea id="dp-fall-${i}" rows="2" style="margin-bottom:6px;">${safeStr(p.fallbackLang)}</textarea>
+      <label>Hard Limit (never accept)</label>
+      <input type="text" id="dp-hard-${i}" value="${safeStr(p.hardLimit)}" style="margin-bottom:6px;" />
+      <label>Notes / Conditions</label>
+      <input type="text" id="dp-notes-${i}" value="${safeStr(p.notes)}" />
+    </div>`).join("");
+}
+
+async function saveDistilledPosition(idx) {
+  const category    = distilledPositions[idx].category;
+  const standardLang = document.getElementById(`dp-std-${idx}`).value.trim();
+  const fallbackLang = document.getElementById(`dp-fall-${idx}`).value.trim();
+  const hardLimit    = document.getElementById(`dp-hard-${idx}`).value.trim();
+  const notes        = document.getElementById(`dp-notes-${idx}`).value.trim();
+
+  if (!playbook.clauses) playbook.clauses = [];
+  const existing = playbook.clauses.findIndex(c => c.category === category);
+  const entry = { id: existing >= 0 ? playbook.clauses[existing].id : Date.now().toString(), category, position: "negotiate", standardLang, fallbackLang, hardLimit, notes, createdAt: new Date().toISOString() };
+  if (existing >= 0) playbook.clauses[existing] = entry;
+  else playbook.clauses.push(entry);
+
+  try {
+    await writeDriveFile("playbook.json", playbook.clauses);
+    const card = document.getElementById(`dcard-${idx}`);
+    if (card) card.style.borderColor = "#16a34a";
+  } catch(e) { alert("Save failed: " + e.message); }
+}
+
+async function saveAllDistilled() {
+  for (let i = 0; i < distilledPositions.length; i++) {
+    await saveDistilledPosition(i);
+  }
+  renderPlaybookSummary();
+  closeDistill();
+}
+
+function closeDistill() {
+  document.getElementById("view-distill").style.display = "none";
+  document.getElementById("tab-resources").style.display = "block";
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
