@@ -1466,22 +1466,22 @@ async function savePosition() {
 
 function selectCategory(el, cat) {
   uploadCategory = cat;
-  const isPos = cat === "positions";
-  const showText = cat === "completed" || cat === "templates";
-  document.getElementById("file-upload-section").style.display    = isPos ? "none"  : "block";
-  document.getElementById("position-entry-section").style.display = isPos ? "block" : "none";
-  document.getElementById("type-pills").style.display             = isPos ? "none"  : "flex";
-  document.getElementById("contract-text-section").style.display  = showText ? "block" : "none";
+  const isPos      = cat === "positions";
+  const isTemplate = cat === "templates";
+  const isComplete = cat === "completed";
+  document.getElementById("file-upload-section").style.display    = isComplete ? "block" : "none";
+  document.getElementById("position-entry-section").style.display = isPos      ? "block" : "none";
+  document.getElementById("type-pills").style.display             = isPos      ? "none"  : "flex";
+  document.getElementById("contract-text-section").style.display  = (isTemplate || isComplete) ? "block" : "none";
   document.getElementById("upload-btn").textContent = "Save to Drive";
-  if (showText) {
-    const isTemplate = cat === "templates";
-    document.getElementById("contract-text-label").textContent = isTemplate ? "Template Text" : "Contract Text";
-    document.getElementById("contract-text-hint").textContent  = isTemplate
-      ? "Paste the full template text — this is what the AI compares contracts against."
-      : "Paste the full contract text — used to distill positions from deal history.";
-    document.getElementById("contract-text-input").placeholder = isTemplate
-      ? "Paste your standard template text here…"
-      : "Paste the full contract text here…";
+  if (isTemplate) {
+    document.getElementById("contract-text-label").textContent = "Template Text";
+    document.getElementById("contract-text-hint").textContent  = "Paste the full template text — this is what the AI compares contracts against.";
+    document.getElementById("contract-text-input").placeholder = "Paste your standard template text here…";
+  } else if (isComplete) {
+    document.getElementById("contract-text-label").textContent = "Contract Text";
+    document.getElementById("contract-text-hint").textContent  = "Paste the full contract text — used to distill positions from deal history.";
+    document.getElementById("contract-text-input").placeholder = "Paste the full contract text here…";
   }
   document.querySelectorAll("[data-cat]").forEach(p => p.classList.remove("active"));
   el.classList.add("active");
@@ -1499,10 +1499,8 @@ async function uploadDocument() {
     ? document.getElementById("contract-text-input").value.trim() : "";
 
   // Validation
+  if (uploadCategory === "templates" && !contractText) { alert("Please paste the template text."); return; }
   if (uploadCategory === "completed" && !file && !contractText) { alert("Please paste contract text or select a file."); return; }
-  if (uploadCategory === "templates" && !file && !contractText) { alert("Please select a file or paste template text."); return; }
-  if (uploadCategory !== "completed" && uploadCategory !== "templates" && !file) { alert("Please select a file first."); return; }
-  if (uploadCategory === "templates" && !contractText) { alert("Please paste the template text — it's needed for AI contract review."); return; }
 
   const btn = document.getElementById("upload-btn");
   const status = document.getElementById("upload-status");
@@ -1514,11 +1512,11 @@ async function uploadDocument() {
     const resources = await driveReadFile(token, folderId, "resources.json") || [];
 
     let fileId = null;
-    let fileName = file ? file.name : ("contract-" + Date.now() + ".txt");
+    let fileName = file ? file.name : (`${uploadCategory}-` + Date.now() + ".txt");
     if (file) {
       fileId = await driveUploadFile(token, folderId, file);
-    } else {
-      // Text-only: save as a plain text file in Drive
+    } else if (contractText) {
+      // Text-only (templates + completed without a file)
       const blob = new Blob([contractText], { type: "text/plain" });
       const textFile = new File([blob], fileName, { type: "text/plain" });
       fileId = await driveUploadFile(token, folderId, textFile);
