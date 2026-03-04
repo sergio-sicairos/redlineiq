@@ -407,6 +407,7 @@ const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 let playbook = { clauses: [], contracts: [], outcomes: [] };
 let reviewClauses = [];
 let docText = "";
+let lastDocComments = []; // original extracted comments, kept for decision matching
 let uploadCategory = "templates";
 let uploadType = "MSA";
 
@@ -640,6 +641,7 @@ async function startReview() {
       getDocumentComments()
     ]);
     docText = rawText;
+    lastDocComments = docComments;
     if (!docText.trim()) { alert("Document appears to be empty."); show("view-idle"); return; }
 
     const commentLabel = docComments.length
@@ -755,7 +757,26 @@ function insertIntoDoc(text) {
 
 // ── Render results ────────────────────────────────────────────────────────────
 function renderResults(result) {
-  reviewClauses = (result.clauses||[]).map(c => ({...c, userDecision: null, userNotes: ""}));
+  reviewClauses = (result.clauses||[]).map(c => {
+    const clause = {...c, userDecision: null, userNotes: ""};
+    // Tag as a comment-origin clause by matching found text against extracted comments,
+    // regardless of what category Claude assigned. This makes the reply logic reliable.
+    if (lastDocComments.length) {
+      const normFound = normalizeForSearch(c.found || "").slice(0, 80);
+      const match = lastDocComments.find(dc => {
+        const normAnchor   = normalizeForSearch(dc.anchoredText || "").slice(0, 80);
+        const normContent  = normalizeForSearch(dc.content      || "").slice(0, 80);
+        return (normFound && normAnchor  && (normFound.includes(normAnchor.slice(0,40))  || normAnchor.includes(normFound.slice(0,40))))
+            || (normFound && normContent && (normFound.includes(normContent.slice(0,40)) || normContent.includes(normFound.slice(0,40))));
+      });
+      if (match) {
+        clause._isComment    = true;
+        clause._commentContent = match.content;
+        clause._commentAnchor  = match.anchoredText;
+      }
+    }
+    return clause;
+  });
 
   // Risk badge
   const rC = {low:"#22c55e",medium:"#f59e0b",high:"#ef4444"};
@@ -784,7 +805,7 @@ function renderClauses() {
     return `
     <div class="clause-card ${dec}" id="clause-${i}">
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px;">
-        ${c.category==="Comment"
+        ${c._isComment
           ? `<span class="badge" style="background:rgba(255,255,255,0.08);color:#ffffff;border:1px solid rgba(255,255,255,0.25)">💬 Comment</span>`
           : `<span class="badge" style="background:rgba(255,255,255,0.06);color:#cccccc;border:1px solid rgba(255,255,255,0.22)">${safeStr(c.category)}</span>`
         }
@@ -856,8 +877,8 @@ async function applyDecisionToDoc(idx, decision) {
   try {
     await Word.run(async (context) => {
 
-      // Comment items: reply to the existing comment instead of creating a new one
-      if (clause.category === "Comment") {
+      // Comment-origin items: append decision to the existing comment's content
+      if (clause._isComment) {
         await replyToMatchingComment(context, clause, decision);
         return;
       }
@@ -898,36 +919,31 @@ async function applyDecisionToDoc(idx, decision) {
   }
 }
 
-// Find the document comment whose anchored text best matches clause.found,
-// then reply to it with the appropriate text for the given decision.
+// Find the exact document comment and append the decision to its content.
+// Word JS API has no replies.add() — we update the comment's own text instead.
 async function replyToMatchingComment(context, clause, decision) {
   const coll = context.document.body.getComments();
-  coll.load("items");
+  coll.load("items/content");
   await context.sync();
   if (!coll.items.length) return;
 
-  coll.items.forEach(c => c.load("content"));
-  const ranges = coll.items.map(c => c.getRange());
-  ranges.forEach(r => r.load("text"));
-  await context.sync();
+  // Match by stored original content/anchor (set during renderResults)
+  const normOrigContent = normalizeForSearch(clause._commentContent || "").slice(0, 80);
+  const normOrigAnchor  = normalizeForSearch(clause._commentAnchor  || "").slice(0, 80);
 
-  // Pick the comment whose anchored text best overlaps with clause.found
-  const normFound = normalizeForSearch(clause.found || "").slice(0, 100);
-  let matched = coll.items[0]; // default to first if nothing better found
-  let bestLen = 0;
-  for (let i = 0; i < coll.items.length; i++) {
-    const anchor = normalizeForSearch(ranges[i].text || "").slice(0, 100);
-    const shorter = normFound.length <= anchor.length ? normFound : anchor;
-    const longer  = normFound.length >  anchor.length ? normFound : anchor;
-    const overlap = shorter.slice(0, 60);
-    if (overlap && longer.includes(overlap) && overlap.length > bestLen) {
-      bestLen = overlap.length;
-      matched = coll.items[i];
-    }
+  let matched = null;
+  let bestScore = 0;
+  for (const c of coll.items) {
+    const normContent = normalizeForSearch(c.content || "").slice(0, 80);
+    let score = 0;
+    if (normOrigContent && normContent && normContent.includes(normOrigContent.slice(0, 50))) score += 2;
+    if (normOrigAnchor  && normContent && normContent.includes(normOrigAnchor.slice(0,  30))) score += 1;
+    if (score > bestScore) { bestScore = score; matched = c; }
   }
+  if (!matched) matched = coll.items[0]; // last resort
 
-  const replyText = {
-    accept:    "Accepted",
+  const suffix = {
+    accept:    "✓ Accepted",
     negotiate: clause.suggestedLanguage
                  ? "↔ Counter: " + clause.suggestedLanguage.slice(0, 300)
                  : "↔ Counter proposed",
@@ -939,7 +955,9 @@ async function replyToMatchingComment(context, clause, decision) {
                  : "⚑ Flagged for review",
   }[decision] || "Reviewed";
 
-  matched.replies.add(replyText);
+  // Append decision to the comment's own text (replies.add is not a Word JS API)
+  matched.content = matched.content + "\n\n" + suffix;
+  if (decision === "accept") matched.resolved = true;
   await context.sync();
 }
 
