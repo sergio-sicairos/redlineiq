@@ -495,7 +495,7 @@ async function ensureDriveToken() {
         client.requestAccessToken({ prompt: "" });
       } catch(e) { reject(e); }
     }),
-    new Promise((_, rej) => setTimeout(() => rej(new Error("Auth timed out — click Connect in settings.")), 5000))
+    new Promise((_, rej) => setTimeout(() => rej(new Error("Auth timed out — click Connect in settings.")), 3000))
   ]);
 }
 
@@ -532,8 +532,7 @@ function driveTimeout(promise, ms) {
 }
 
 Office.onReady(async (info) => {
-  setStep("Starting up…");
-  await bootLoadDrive();
+  // Show UI immediately — never block on Drive
   document.getElementById("loading-screen").style.display = "none";
   document.getElementById("tab-bar").style.display = "flex";
   if (!getApiKey()) {
@@ -543,27 +542,28 @@ Office.onReady(async (info) => {
     document.getElementById("main").style.display = "block";
     show("view-idle");
   }
+  // Load Drive in background — updates banner when done
+  bootLoadDrive();
 });
 
 async function bootLoadDrive() {
   const clientId = getClientId();
   if (!clientId) {
-    // Never configured — show not-connected banner quietly
     playbook = { clauses: getDefaults(), contracts: [], outcomes: [] };
     renderPlaybookSummary();
     setDriveBanner("not-connected");
     return;
   }
-  // Client ID exists — always try (uses cached token or silent refresh)
-  setStep("Connecting to Drive…");
+  // Show connecting banner while Drive loads in background
+  const el = document.getElementById("drive-banner");
+  if (el) { el.style.display = "block"; el.style.background = "rgba(255,255,255,0.04)"; el.style.color = "#888888"; el.style.borderColor = "rgba(255,255,255,0.2)"; el.innerHTML = "⟳ Connecting to Drive…"; }
   try {
-    playbook = await driveTimeout(loadFromDrive(), 7000);
+    playbook = await driveTimeout(loadFromDrive(), 6000);
     renderPlaybookSummary();
     setDriveBanner("ok");
   } catch(e) {
     playbook = { clauses: getDefaults(), contracts: [], outcomes: [] };
     renderPlaybookSummary();
-    // Distinguish "needs login" from "load error"
     const needsLogin = e.message.includes("timed out") || e.message.includes("Auth");
     setDriveBanner(needsLogin ? "not-connected" : "error", e.message);
   }
