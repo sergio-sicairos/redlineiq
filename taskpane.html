@@ -267,8 +267,13 @@
     <div class="card" style="text-align:center; padding:24px;">
       <div style="font-size:22px;margin-bottom:8px;color:#e02020;">⚡</div>
       <div style="font-weight:600;margin-bottom:4px;color:#ffffff;">Ready to Review</div>
-      <div class="text-muted text-xs" style="margin-bottom:14px;">
-        Reads the open Word document and reviews it against your shared playbook on Google Drive.
+      <div class="text-muted text-xs" style="margin-bottom:12px;">
+        Select the document type then run the review.
+      </div>
+      <div style="display:flex;gap:6px;justify-content:center;margin-bottom:14px;">
+        <span class="pill active" id="rdt-MSA"  onclick="selectReviewType(this,'MSA')">MSA</span>
+        <span class="pill"        id="rdt-DPA"  onclick="selectReviewType(this,'DPA')">DPA</span>
+        <span class="pill"        id="rdt-MNDA" onclick="selectReviewType(this,'MNDA')">MNDA</span>
       </div>
       <button class="btn btn-primary btn-full" onclick="startReview()">
         Run AI Review
@@ -410,6 +415,7 @@ let docText = "";
 let lastDocComments = []; // original extracted comments, kept for decision matching
 let uploadCategory = "templates";
 let uploadType = "MSA";
+let reviewDocType = "MSA";
 
 // ── Persistent storage (OfficeRuntime.storage + localStorage fallback) ────────
 async function storageGet(key) {
@@ -653,27 +659,31 @@ async function startReview() {
   setStep("Reading document text…");
 
   try {
-    // 1. Extract document text and comments in parallel
+    // 1. Extract document text, comments, and strikethrough in parallel
     setStep("Reading document…");
-    const [rawText, docComments] = await Promise.all([
+    const [rawText, docComments, struckTexts] = await Promise.all([
       getDocumentText(),
-      getDocumentComments()
+      getDocumentComments(),
+      getStrikethroughTexts()
     ]);
     docText = rawText;
     lastDocComments = docComments;
     if (!docText.trim()) { alert("Document appears to be empty."); show("view-idle"); return; }
 
-    const commentLabel = docComments.length
-      ? `Analyzing document + ${docComments.length} comment${docComments.length > 1 ? "s" : ""}…`
-      : "Analyzing against playbook…";
+    const commentLabel = `Analyzing ${reviewDocType}${docComments.length ? ` + ${docComments.length} comment${docComments.length > 1?"s":""}` : ""}${struckTexts.length ? ` + ${struckTexts.length} strikethrough` : ""}…`;
     setStep(commentLabel);
 
-    // 2. Build context
+    // 2. Build context — filter template to matching doc type
     const playbookCtx = (playbook.clauses||[]).map(c =>
       `[${c.category}] ${c.position}: ${(c.standardLang||"").slice(0,300)}${c.notes?` | ${c.notes}`:""}`
     ).join("\n");
-    const tplCtx = (playbook.contracts||[]).filter(c=>c.docRole==="template")
-      .map(c=>`[TEMPLATE] ${c.name}:\n${(c.text||"").slice(0,30000)}`).join("\n\n");
+
+    const matchingTemplates = (playbook.contracts||[]).filter(c =>
+      c.docRole === "template" &&
+      (c.type === reviewDocType || (c.name||"").toUpperCase().includes(reviewDocType))
+    );
+    const tplCtx = matchingTemplates
+      .map(c=>`[TEMPLATE ${reviewDocType}] ${c.name}:\n${(c.text||"").slice(0,30000)}`).join("\n\n");
 
     const commentsCtx = docComments.length
       ? docComments.map((c, i) =>
@@ -681,20 +691,26 @@ async function startReview() {
         ).join("\n")
       : "None";
 
-    const sys = `Senior contract review AI.
+    const struckCtx = struckTexts.length
+      ? struckTexts.map((t, i) => `[STRIKETHROUGH ${i+1}] "${t.slice(0,400)}"`).join("\n")
+      : "None";
+
+    const sys = `Senior contract review AI. Document type being reviewed: ${reviewDocType}.
 PLAYBOOK:\n${playbookCtx||"None"}
-TEMPLATES:\n${tplCtx||"None"}
+${reviewDocType} TEMPLATE:\n${tplCtx||"No matching template found — flag any clauses that deviate from standard ${reviewDocType} terms."}
 
-Only flag genuine material differences.
-The "sectionRef" field MUST be the full section number exactly as it appears in the document, including all subsection digits (e.g. "8.2.1" not "8" or "8.2"). Never truncate or round up a section number.
-The "found" field MUST be EXACT verbatim text from the document (first 1-2 sentences of the relevant passage).
-
-Also review each EXISTING COMMENT as its own clause entry. For comment entries: set category to "Comment", set "found" to the exact text the comment is anchored to, set "reasoning" to what the comment raises and whether it needs action, and give a recommendation as normal.
+IMPORTANT INSTRUCTIONS:
+1. Do an EXACT comparison of the submitted document against the ${reviewDocType} template above. Any clause, section, or language present in the submitted document that differs from or is absent in the template MUST be flagged as a separate "found" entry.
+2. Any section in the template that is MISSING from the submitted document must also be flagged.
+3. Each STRIKETHROUGH section in the document is pre-identified deleted text — include each as its own clause entry with category "Strikethrough", set "found" to the exact struck text, and recommend whether the deletion is acceptable.
+4. Each EXISTING COMMENT must be its own clause entry with category "Comment", set "found" to the anchored text, and give a recommendation.
+5. The "sectionRef" field MUST be the full section number exactly as it appears (e.g. "8.2.1" not "8").
+6. The "found" field MUST be EXACT verbatim text from the document.
 
 Return JSON only:
 {"overallRisk":"low|medium|high","summary":"2-3 sentences","clauses":[{"category":"","sectionRef":"","found":"EXACT verbatim","deviationFromTemplate":"","recommendation":"accept|negotiate|reject|flag","reasoning":"","suggestedLanguage":""}],"criticalIssues":[],"autoApprovable":true}`;
 
-    const userMsg = `Review this contract:\n\n${docText.slice(0, 38000)}\n\nEXISTING DOCUMENT COMMENTS:\n${commentsCtx}`;
+    const userMsg = `Review this ${reviewDocType}:\n\n${docText.slice(0, 35000)}\n\nEXISTING DOCUMENT COMMENTS:\n${commentsCtx}\n\nSTRIKETHROUGH SECTIONS DETECTED IN DOCUMENT:\n${struckCtx}`;
     const raw = await callClaude(sys, userMsg, 10000);
     const result = repairJSON(raw);
 
@@ -708,6 +724,14 @@ Return JSON only:
   }
 }
 
+function selectReviewType(el, type) {
+  reviewDocType = type;
+  ["MSA","DPA","MNDA"].forEach(t => {
+    const p = document.getElementById("rdt-" + t);
+    if (p) p.classList.toggle("active", t === type);
+  });
+}
+
 // ── Read Word document ────────────────────────────────────────────────────────
 function getDocumentText() {
   return new Promise((resolve, reject) => {
@@ -717,6 +741,32 @@ function getDocumentText() {
       await context.sync();
       resolve(body.text);
     }).catch(reject);
+  });
+}
+
+// ── Extract all strikethrough text from the document ─────────────────────────
+function getStrikethroughTexts() {
+  return new Promise((resolve) => {
+    Word.run(async (context) => {
+      try {
+        const paragraphs = context.document.body.paragraphs;
+        paragraphs.load("items");
+        await context.sync();
+        paragraphs.items.forEach(p => {
+          p.load("text");
+          p.font.load("strikeThrough");
+        });
+        await context.sync();
+        // Collect paragraphs that are fully struck through
+        const struck = paragraphs.items
+          .filter(p => p.font.strikeThrough && p.text.trim().length > 3)
+          .map(p => p.text.trim());
+        resolve(struck);
+      } catch(e) {
+        console.warn("Strikethrough detection:", e.message);
+        resolve([]);
+      }
+    }).catch(() => resolve([]));
   });
 }
 
