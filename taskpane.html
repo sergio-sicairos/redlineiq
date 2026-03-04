@@ -450,6 +450,11 @@
   </div>
 
   <div class="card" style="margin-bottom:10px;">
+    <div class="section-title">Positions</div>
+    <button class="btn btn-secondary btn-full btn-sm" onclick="showPositionHistory()" style="margin-bottom:0;">View Position History</button>
+  </div>
+
+  <div class="card" style="margin-bottom:10px;">
     <div class="section-title">AI Position Distillation</div>
     <div class="text-xs text-muted" style="margin-bottom:10px;line-height:1.5;">Analyze your completed deal history and automatically generate positions for each clause category. Review and approve before saving.</div>
     <button class="btn btn-primary btn-full" onclick="distillPositions()">Distill Positions from History</button>
@@ -475,6 +480,15 @@
   </div>
   <div class="text-xs text-muted" style="margin-bottom:12px;">Review each position below. Edit any field before saving. Saving replaces existing positions in your playbook.</div>
   <div id="distill-cards"></div>
+</div>
+
+<!-- ═══ POSITION HISTORY VIEW ═══ -->
+<div id="view-position-history" style="display:none; padding:14px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+    <div style="font-weight:700;font-size:14px;color:#ffffff;">Position History</div>
+    <button class="btn btn-secondary btn-sm" onclick="closePositionHistory()">Back</button>
+  </div>
+  <div id="position-history-list"></div>
 </div>
 
 </div> <!-- end #main -->
@@ -1414,6 +1428,16 @@ async function savePosition() {
   try {
     if (!playbook.clauses) playbook.clauses = [];
     const idx = playbook.clauses.findIndex(c => c.category === category);
+
+    // Archive previous version to history before overwriting
+    if (idx >= 0) {
+      const token = await ensureDriveToken();
+      const folderId = await driveFindOrCreateFolder(token, FOLDER);
+      const history = await driveReadFile(token, folderId, "playbook_history.json") || [];
+      history.push({ ...playbook.clauses[idx], savedAt: new Date().toISOString() });
+      await driveWriteFile(token, folderId, "playbook_history.json", history);
+    }
+
     const entry = { id: idx >= 0 ? playbook.clauses[idx].id : Date.now().toString(), category, position: "negotiate", standardLang, fallbackLang, hardLimit, notes, createdAt: new Date().toISOString() };
     if (idx >= 0) playbook.clauses[idx] = entry;
     else playbook.clauses.push(entry);
@@ -1745,6 +1769,100 @@ async function saveAllDistilled() {
 
 function closeDistill() {
   document.getElementById("view-distill").style.display = "none";
+  document.getElementById("tab-resources").style.display = "block";
+}
+
+// ── Position History ──────────────────────────────────────────────────────────
+async function showPositionHistory() {
+  document.getElementById("tab-resources").style.display = "none";
+  document.getElementById("view-position-history").style.display = "block";
+  document.getElementById("position-history-list").innerHTML = '<div class="text-muted text-xs" style="padding:12px;">Loading…</div>';
+  try {
+    const token = await ensureDriveToken();
+    const folderId = await driveFindOrCreateFolder(token, FOLDER);
+    const history = await driveReadFile(token, folderId, "playbook_history.json") || [];
+    const current = playbook.clauses || [];
+
+    if (!history.length && !current.length) {
+      document.getElementById("position-history-list").innerHTML = '<div class="text-muted text-xs" style="padding:12px;">No positions saved yet.</div>';
+      return;
+    }
+
+    // Group history by category, newest first
+    const byCategory = {};
+    history.forEach(h => {
+      if (!byCategory[h.category]) byCategory[h.category] = [];
+      byCategory[h.category].push(h);
+    });
+    Object.keys(byCategory).forEach(k => byCategory[k].sort((a,b) => new Date(b.savedAt) - new Date(a.savedAt)));
+
+    // Build cards — one per category showing current + history
+    const categories = [...new Set([...current.map(c=>c.category), ...Object.keys(byCategory)])].sort();
+
+    document.getElementById("position-history-list").innerHTML = categories.map(cat => {
+      const cur = current.find(c => c.category === cat);
+      const versions = byCategory[cat] || [];
+
+      const currentBlock = cur ? `
+        <div style="background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.3);padding:10px;margin-bottom:6px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="font-size:10px;font-weight:700;color:#16a34a;">● CURRENT</span>
+            <span style="font-size:10px;color:#555;">${new Date(cur.createdAt||0).toLocaleDateString()}</span>
+          </div>
+          ${cur.standardLang?`<div style="font-size:11px;color:#cccccc;margin-bottom:3px;"><strong style="color:#ffffff;">Standard:</strong> ${safeStr(cur.standardLang).slice(0,200)}</div>`:""}
+          ${cur.fallbackLang?`<div style="font-size:11px;color:#cccccc;margin-bottom:3px;"><strong style="color:#ffffff;">Fallback:</strong> ${safeStr(cur.fallbackLang).slice(0,150)}</div>`:""}
+          ${cur.hardLimit?`<div style="font-size:11px;color:#f5c842;margin-bottom:3px;"><strong>Hard Limit:</strong> ${safeStr(cur.hardLimit).slice(0,150)}</div>`:""}
+          ${cur.notes?`<div style="font-size:11px;color:#888;"><strong>Notes:</strong> ${safeStr(cur.notes).slice(0,150)}</div>`:""}
+        </div>` : "";
+
+      const historyBlocks = versions.map((v, vi) => `
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);padding:10px;margin-bottom:6px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="font-size:10px;color:#555555;">v${versions.length - vi} — ${new Date(v.savedAt).toLocaleDateString()} ${new Date(v.savedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
+            <button onclick="restorePosition(${JSON.stringify(v).replace(/"/g,'&quot;')})" style="font-size:10px;padding:2px 8px;background:rgba(224,32,32,0.15);border:1px solid rgba(224,32,32,0.4);color:#e02020;cursor:pointer;">Restore</button>
+          </div>
+          ${v.standardLang?`<div style="font-size:11px;color:#888;margin-bottom:3px;"><strong style="color:#aaaaaa;">Standard:</strong> ${safeStr(v.standardLang).slice(0,200)}</div>`:""}
+          ${v.fallbackLang?`<div style="font-size:11px;color:#888;margin-bottom:3px;"><strong style="color:#aaaaaa;">Fallback:</strong> ${safeStr(v.fallbackLang).slice(0,150)}</div>`:""}
+          ${v.hardLimit?`<div style="font-size:11px;color:#888;margin-bottom:3px;"><strong style="color:#aaaaaa;">Hard Limit:</strong> ${safeStr(v.hardLimit).slice(0,150)}</div>`:""}
+          ${v.notes?`<div style="font-size:11px;color:#666;"><strong>Notes:</strong> ${safeStr(v.notes).slice(0,150)}</div>`:""}
+        </div>`).join("");
+
+      return `<div class="card" style="margin-bottom:10px;">
+        <div style="font-weight:700;color:#ffffff;font-size:13px;margin-bottom:8px;">${safeStr(cat)}</div>
+        ${currentBlock}
+        ${historyBlocks || (!cur ? '<div class="text-muted text-xs">No versions yet.</div>' : "")}
+      </div>`;
+    }).join("");
+  } catch(e) {
+    document.getElementById("position-history-list").innerHTML = `<div style="color:#ef4444;font-size:12px;">Failed to load: ${e.message}</div>`;
+  }
+}
+
+async function restorePosition(entry) {
+  if (!confirm(`Restore this version of "${entry.category}"? The current version will be archived to history.`)) return;
+  if (!playbook.clauses) playbook.clauses = [];
+  const idx = playbook.clauses.findIndex(c => c.category === entry.category);
+
+  // Archive current before restoring
+  if (idx >= 0) {
+    const token = await ensureDriveToken();
+    const folderId = await driveFindOrCreateFolder(token, FOLDER);
+    const history = await driveReadFile(token, folderId, "playbook_history.json") || [];
+    history.push({ ...playbook.clauses[idx], savedAt: new Date().toISOString() });
+    await driveWriteFile(token, folderId, "playbook_history.json", history);
+  }
+
+  const restored = { ...entry, createdAt: new Date().toISOString() };
+  delete restored.savedAt;
+  if (idx >= 0) playbook.clauses[idx] = restored;
+  else playbook.clauses.push(restored);
+  await writeDriveFile("playbook.json", playbook.clauses);
+  renderPlaybookSummary();
+  showPositionHistory(); // Refresh view
+}
+
+function closePositionHistory() {
+  document.getElementById("view-position-history").style.display = "none";
   document.getElementById("tab-resources").style.display = "block";
 }
 
