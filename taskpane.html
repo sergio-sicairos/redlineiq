@@ -379,19 +379,16 @@
       <span class="pill" data-type="Other" onclick="selectType(this,'Other')">Other</span>
     </div>
 
-    <!-- File upload (shown for templates + completed) -->
-    <div id="file-upload-section">
+    <!-- File upload (shown for Completed Docs only) -->
+    <div id="file-upload-section" style="display:none">
       <div class="upload-drop" onclick="document.getElementById('upload-file-input').click()">
         <div style="font-size:22px;margin-bottom:8px;color:#555555;">☁</div>
         <div style="font-weight:600;font-size:12px;margin-bottom:4px;color:#cccccc;">Click to choose a file</div>
-        <div class="text-muted text-xs">PDF, DOCX, or TXT</div>
+        <div class="text-muted text-xs">PDF, DOCX, or TXT (optional if pasting text)</div>
         <div id="upload-filename" style="margin-top:8px;font-size:11px;color:#ffffff;font-weight:600;"></div>
         <input type="file" id="upload-file-input" accept=".pdf,.docx,.doc,.txt"
           onchange="document.getElementById('upload-filename').textContent = this.files[0]?.name || ''" />
       </div>
-      <button class="btn btn-primary btn-full" style="margin-top:12px;" onclick="uploadDocument()" id="upload-btn">
-        Upload to Drive
-      </button>
     </div>
 
     <!-- Position entry (shown for Our Positions) -->
@@ -428,11 +425,12 @@
       <button class="btn btn-primary btn-full" onclick="savePosition()">Save Position</button>
     </div>
 
-    <!-- Contract text (shown for Templates + Completed Docs) -->
-    <div id="contract-text-section" style="display:none">
-      <div class="section-title" style="margin-top:4px;" id="contract-text-label">Contract Text</div>
-      <div id="contract-text-hint" class="text-muted text-xs" style="margin-bottom:6px;"></div>
-      <textarea id="contract-text-input" rows="8" placeholder="Paste the full contract text here."></textarea>
+    <!-- Text paste (shown for Templates + Completed Docs) -->
+    <div id="contract-text-section">
+      <div class="section-title" style="margin-top:4px;" id="contract-text-label">Template Text</div>
+      <div id="contract-text-hint" class="text-muted text-xs" style="margin-bottom:6px;">Paste the full template text — this is what the AI compares contracts against.</div>
+      <textarea id="contract-text-input" rows="8" placeholder="Paste your standard template text here…"></textarea>
+      <button class="btn btn-primary btn-full" style="margin-top:12px;" onclick="uploadDocument()" id="upload-btn">Save to Drive</button>
     </div>
 
     <div id="upload-status" style="margin-top:8px;font-size:11px;"></div>
@@ -1471,9 +1469,8 @@ function selectCategory(el, cat) {
   const isComplete = cat === "completed";
   document.getElementById("file-upload-section").style.display    = isComplete ? "block" : "none";
   document.getElementById("position-entry-section").style.display = isPos      ? "block" : "none";
+  document.getElementById("contract-text-section").style.display  = isPos      ? "none"  : "block";
   document.getElementById("type-pills").style.display             = isPos      ? "none"  : "flex";
-  document.getElementById("contract-text-section").style.display  = (isTemplate || isComplete) ? "block" : "none";
-  document.getElementById("upload-btn").textContent = "Save to Drive";
   if (isTemplate) {
     document.getElementById("contract-text-label").textContent = "Template Text";
     document.getElementById("contract-text-hint").textContent  = "Paste the full template text — this is what the AI compares contracts against.";
