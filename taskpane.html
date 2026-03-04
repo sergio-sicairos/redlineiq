@@ -121,11 +121,8 @@
     .risk-badge-medium { background:rgba(217,119,6,0.12);  color:#d97706; border:1px solid rgba(217,119,6,0.3); }
     .risk-badge-high   { background:rgba(220,38,38,0.12);  color:#dc2626; border:1px solid rgba(220,38,38,0.3); }
     .spinner {
-      width:20px; height:20px; border:2px solid rgba(255,255,255,0.15);
-      border-top-color:#e02020; border-radius:50%;
-      animation:spin 0.7s linear infinite; display:inline-block;
+      width:60px; height:60px; display:inline-block; object-fit:contain;
     }
-    @keyframes spin { to { transform:rotate(360deg); } }
     #loading-screen {
       flex:1; display:flex; flex-direction:column;
       align-items:center; justify-content:center; gap:12px; padding:20px;
@@ -279,7 +276,7 @@
 
 <!-- Loading screen -->
 <div id="loading-screen">
-  <div class="spinner"></div>
+  <img class="spinner" src="gavel_red.gif" alt="">
   <div id="step-indicator">Initializing Office…</div>
 </div>
 
@@ -318,7 +315,7 @@
   <!-- Reviewing state -->
   <div id="view-reviewing" style="display:none">
     <div class="card" style="text-align:center;padding:28px;">
-      <div class="spinner" style="width:32px;height:32px;margin:0 auto 12px;"></div>
+      <img class="spinner" src="gavel_red.gif" alt="" style="width:80px;height:80px;margin:0 auto 12px;display:block;">
       <div style="font-weight:600;margin-bottom:6px;color:#ffffff;">Analyzing Document</div>
       <div id="review-step" class="text-muted text-xs">Reading document text…</div>
     </div>
@@ -453,7 +450,7 @@
 <div id="tab-resources" style="display:none; padding:14px;">
 
   <div id="resources-loading" style="text-align:center;padding:30px;">
-    <div class="spinner" style="margin:0 auto 10px;"></div>
+    <img class="spinner" src="gavel_red.gif" alt="" style="display:block;margin:0 auto 10px;">
     <div class="text-xs text-muted">Loading from Drive…</div>
   </div>
 
