@@ -736,12 +736,20 @@ You have no opinion. You do not know what is "better" or "more standard" in the 
 RULE 4 — COMPLETED DEALS ARE NOT RECOMMENDATIONS.
 The completed deals above show past exceptions we accepted under negotiation pressure. They are NOT our position. Do not use them to flag anything. Only reference them in "suggestedLanguage" if the counterparty has already deviated from the template and you need to show what we have accepted before as a fallback.
 
-RULE 5 — STRIKETHROUGH, ADDED TEXT, AND COMMENTS ARE ALWAYS FLAGGED.
+RULE 5 — STRIKETHROUGH, ADDED TEXT, AND COMMENTS ARE ALWAYS SURFACED.
 Each strikethrough section → its own entry, category "Strikethrough", "found" = exact struck text.
-Each colored/added text section → its own entry, category "Added Language", "found" = exact colored text. These are phrases the other party inserted (colored red, blue, etc.) that may or may not match the template — always flag them for review.
+Each colored/added text section → its own entry, category "Added Language", "found" = exact colored text.
 Each document comment → its own entry, category "Comment", "found" = exact anchored text.
 
-RULE 6 — EXACT FIELDS.
+RULE 6 — RECOMMENDATION MUST BE MEANINGFUL.
+For every finding, set "recommendation" to one of these based on your actual assessment:
+- "accept" — the deviation is minor, harmless, or favorable to us
+- "negotiate" — problematic but we can counter; put our counter-position in "suggestedLanguage"
+- "reject" — unacceptable, must be removed or reverted to template language
+- "flag" — genuinely unclear; needs human judgment
+Do NOT set every finding to "flag". Use all four options based on the severity and nature of the deviation.
+
+RULE 7 — EXACT FIELDS.
 "sectionRef" = full section number as it appears (e.g. "8.2.1"). "found" = exact verbatim text from the submitted document, never paraphrased.
 
 Return JSON only:
