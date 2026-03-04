@@ -1420,6 +1420,9 @@ async function callClaude(system, user, maxTokens = 4096) {
 // ── Navigate to clause in document ───────────────────────────────────────────
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 function switchTab(tab) {
+  // Always collapse resource overlay views when switching any tab
+  document.getElementById("view-position-history").style.display = "none";
+  document.getElementById("view-distill").style.display = "none";
   ["review","upload","resources"].forEach(t => {
     document.getElementById(`tab-${t}`).style.display = t === tab ? "block" : "none";
     document.querySelector(`[data-tab="${t}"]`).classList.toggle("active", t === tab);
@@ -1571,13 +1574,15 @@ async function loadResources() {
     const resources = await driveReadFile(token, folderId, "resources.json") || [];
     document.getElementById("resources-loading").style.display = "none";
     if (!resources.length) { document.getElementById("resources-empty").style.display = "block"; return; }
-    const cats = { templates:0, positions:0, completed:0 };
+    const cats = { templates:0, completed:0 };
     const types = {};
     resources.forEach(r => { if (cats[r.category]!==undefined) cats[r.category]++; types[r.type]=(types[r.type]||0)+1; });
-    const catLabels = { templates:"Templates", positions:"Positions", completed:"Completed" };
+    const posCount = (playbook.clauses || []).length;
     document.getElementById("stats-grid").innerHTML =
-      Object.entries(cats).map(([k,v]) => `<div class="stat-card"><div class="stat-num">${v}</div><div class="stat-label">${catLabels[k]}</div></div>`).join("") +
-      `<div class="stat-card"><div class="stat-num">${resources.length}</div><div class="stat-label">Total Docs</div></div>
+      `<div class="stat-card"><div class="stat-num">${cats.templates}</div><div class="stat-label">Templates</div></div>
+       <div class="stat-card"><div class="stat-num">${posCount}</div><div class="stat-label">Positions</div></div>
+       <div class="stat-card"><div class="stat-num">${cats.completed}</div><div class="stat-label">Completed</div></div>
+       <div class="stat-card"><div class="stat-num">${resources.length}</div><div class="stat-label">Total Docs</div></div>
        <div class="stat-card"><div class="stat-num">${Object.keys(types).length}</div><div class="stat-label">Doc Types</div></div>`;
     document.getElementById("resources-list").innerHTML = resources.slice().reverse().map(r => `
       <div class="resource-row">
