@@ -411,20 +411,39 @@ let lastDocComments = []; // original extracted comments, kept for decision matc
 let uploadCategory = "templates";
 let uploadType = "MSA";
 
+// ── Persistent storage (OfficeRuntime.storage + localStorage fallback) ────────
+async function storageGet(key) {
+  try {
+    if (typeof OfficeRuntime !== "undefined" && OfficeRuntime.storage) {
+      const val = await OfficeRuntime.storage.getItem(key);
+      if (val) return val;
+    }
+  } catch(_) {}
+  return localStorage.getItem(key) || "";
+}
+async function storageSet(key, value) {
+  try {
+    if (typeof OfficeRuntime !== "undefined" && OfficeRuntime.storage) {
+      await OfficeRuntime.storage.setItem(key, value);
+    }
+  } catch(_) {}
+  localStorage.setItem(key, value);
+}
+
 // ── API Key ───────────────────────────────────────────────────────────────────
-async function getApiKey() { return (await OfficeRuntime.storage.getItem("redlineiq_api_key")) || ""; }
+async function getApiKey() { return storageGet("redlineiq_api_key"); }
 async function saveApiKey() {
   const val = document.getElementById("api-key-input").value.trim();
   if (!val.startsWith("sk-ant-")) {
     document.getElementById("key-status").innerHTML = '<span style="color:#ef4444">That doesn\'t look like a valid key.</span>';
     return;
   }
-  await OfficeRuntime.storage.setItem("redlineiq_api_key", val);
+  await storageSet("redlineiq_api_key", val);
   document.getElementById("key-status").innerHTML = '<span style="color:#22c55e">✓ Key saved.</span>';
 }
 
 // ── Google Drive OAuth ────────────────────────────────────────────────────────
-async function getClientId() { return (await OfficeRuntime.storage.getItem("redlineiq_gclient_id")) || ""; }
+async function getClientId() { return storageGet("redlineiq_gclient_id"); }
 function getDriveToken() { return localStorage.getItem("redlineiq_drive_token") || ""; }
 function driveTokenValid() {
   const expiry = parseInt(localStorage.getItem("redlineiq_drive_expiry") || "0");
@@ -437,7 +456,7 @@ async function saveAndConnectDrive() {
     document.getElementById("drive-status").innerHTML = '<span style="color:#ef4444">That doesn\'t look like a valid Client ID.</span>';
     return;
   }
-  await OfficeRuntime.storage.setItem("redlineiq_gclient_id", val);
+  await storageSet("redlineiq_gclient_id", val);
   connectDrive();
 }
 
