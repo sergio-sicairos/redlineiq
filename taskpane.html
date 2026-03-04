@@ -126,8 +126,8 @@
       font-size:12px; color:#cccccc; line-height:1.6; margin-bottom:10px;
     }
     .critical-item {
-      font-size:12px; color:#dc2626; padding:5px 0;
-      border-bottom:1px solid rgba(255,255,255,0.4);
+      font-size:12px; color:#f5c842; padding:5px 0;
+      border-bottom:1px solid rgba(245,200,66,0.3);
     }
     .footer {
       padding:10px 14px; border-top:2px solid #ffffff; display:flex; gap:6px;
@@ -306,8 +306,8 @@
     </div>
 
     <!-- Critical issues -->
-    <div class="card" id="critical-card" style="display:none;border-color:#dc262640;">
-      <div class="section-title" style="color:#dc2626">⚠ Critical Issues</div>
+    <div class="card" id="critical-card" style="display:none;border-color:rgba(245,200,66,0.5);">
+      <div class="section-title" style="color:#f5c842">⚠ Critical Issues</div>
       <div id="critical-list"></div>
     </div>
 
@@ -812,11 +812,12 @@ function renderClauses() {
         ${c.sectionRef?`<span class="badge" style="background:rgba(255,255,255,0.04);color:#aaaaaa;border:1px solid rgba(255,255,255,0.18)">§ ${safeStr(c.sectionRef)}</span>`:""}
         <span class="badge" style="background:rgba(255,255,255,0.03);color:#888888;border:1px solid rgba(255,255,255,0.15)">AI: ${safeStr(c.recommendation)}</span>
       </div>
-      <div style="font-size:11px;color:#777777;margin-bottom:4px;cursor:pointer;"
-        onclick="navigateToClause(${i})"
-        title="Click to jump to this location in the document">
-        <strong style="color:#cccccc">Found:</strong> ${safeStr(c.found).slice(0,120)}…
-        <span style="color:#e02020;font-size:10px;margin-left:4px;">↗ jump</span>
+      <div style="font-size:11px;color:#777777;margin-bottom:4px;">
+        <span style="cursor:pointer;" onclick="navigateToClause(${i})" title="Click to jump to this clause in the document">
+          <strong style="color:#cccccc">Found:</strong>
+          <span id="found-text-${i}">${safeStr(c.found).length > 120 ? safeStr(c.found).slice(0,120) + "…" : safeStr(c.found)}</span>
+        </span>
+        ${safeStr(c.found).length > 120 ? `<span style="color:#e02020;font-size:10px;margin-left:6px;cursor:pointer;" onclick="toggleFoundText(${i})" id="expand-btn-${i}">expand</span>` : ""}
       </div>
       ${c.deviationFromTemplate?`<div style="font-size:11px;color:#d97706;margin-bottom:4px;">⚠ ${safeStr(c.deviationFromTemplate).slice(0,100)}</div>`:""}
       <div style="font-size:11px;color:#cccccc;line-height:1.5;margin-bottom:6px;">${safeStr(c.reasoning).slice(0,150)}</div>
@@ -839,6 +840,20 @@ function renderClauses() {
       ${c.applied ? `<div style="font-size:10px;color:#555555;margin-top:6px;">✓ Applied to document</div>` : ""}
     </div>`;
   }).join("");
+}
+
+function toggleFoundText(i) {
+  const c = reviewClauses[i];
+  const el = document.getElementById("found-text-" + i);
+  const btn = document.getElementById("expand-btn-" + i);
+  if (!el || !btn) return;
+  if (btn.textContent === "expand") {
+    el.textContent = safeStr(c.found);
+    btn.textContent = "collapse";
+  } else {
+    el.textContent = safeStr(c.found).slice(0, 120) + "…";
+    btn.textContent = "expand";
+  }
 }
 
 function setDecision(idx, decision) {
