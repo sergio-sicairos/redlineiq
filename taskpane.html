@@ -390,67 +390,31 @@
     </div>
 
     <!-- Position entry (shown for Our Positions) -->
-    <div id="position-entry-section" style="display:none;">
-      <div class="section-title" style="margin-top:4px;">Position</div>
-      <select id="position-select" style="width:100%;padding:7px 10px;background:#0c0c0c;color:#ffffff;border:1px solid #ffffff;font-size:12px;margin-bottom:8px;outline:none;" onchange="onPositionSelect()">
+    <div id="position-entry-section" style="display:none">
+      <div class="section-title" style="margin-top:4px;">Position Type</div>
+      <select id="position-select" onchange="onPositionSelect()" style="width:100%;padding:7px 10px;background:#111111;color:#ffffff;border:1px solid #ffffff;font-size:12px;margin-bottom:10px;outline:none;-webkit-appearance:none;appearance:none;">
         <option value="">— Select a position —</option>
-        <optgroup label="Core Commercial">
-          <option>Limitation of Liability</option>
-          <option>Indemnification</option>
-          <option>Warranty &amp; Disclaimer</option>
-          <option>Payment Terms</option>
-          <option>Pricing &amp; Fees</option>
-          <option>Invoicing &amp; Late Fees</option>
-        </optgroup>
-        <optgroup label="Term &amp; Termination">
-          <option>Term &amp; Renewal</option>
-          <option>Termination for Convenience</option>
-          <option>Termination for Cause</option>
-          <option>Effect of Termination</option>
-          <option>Renewal Notice Period</option>
-        </optgroup>
-        <optgroup label="IP &amp; Confidentiality">
-          <option>IP / Ownership</option>
-          <option>License Grant</option>
-          <option>Confidentiality</option>
-          <option>Non-Disclosure Obligations</option>
-          <option>Return of Information</option>
-        </optgroup>
-        <optgroup label="Data &amp; Privacy">
-          <option>Data Processing</option>
-          <option>Data Subject Rights</option>
-          <option>Security Measures</option>
-          <option>Sub-processors</option>
-          <option>Data Retention</option>
-          <option>Data Breach Notification</option>
-          <option>International Data Transfers</option>
-        </optgroup>
-        <optgroup label="Compliance &amp; Governance">
-          <option>Governing Law</option>
-          <option>Dispute Resolution</option>
-          <option>Jurisdiction &amp; Venue</option>
-          <option>Force Majeure</option>
-          <option>Audit Rights</option>
-          <option>Compliance with Laws</option>
-          <option>Anti-Bribery &amp; Corruption</option>
-        </optgroup>
-        <optgroup label="Operational">
-          <option>Service Levels / SLA</option>
-          <option>Change Management</option>
-          <option>Assignment</option>
-          <option>Subcontracting</option>
-          <option>Non-Solicitation</option>
-          <option>Insurance</option>
-          <option>Notices</option>
-          <option>Entire Agreement</option>
-          <option>Severability</option>
-          <option>Waiver</option>
-        </optgroup>
+        <option>Limitation of Liability</option>
+        <option>Indemnification</option>
+        <option>Confidentiality</option>
+        <option>Data Privacy / DPA</option>
+        <option>Termination</option>
+        <option>IP / Ownership</option>
+        <option>Warranty</option>
+        <option>Insurance</option>
+        <option>Payment Terms</option>
+        <option>Governing Law</option>
+        <option>Non-Solicitation</option>
+        <option>Force Majeure</option>
+        <option>Assignment</option>
+        <option>Audit Rights</option>
+        <option>SLA / Uptime</option>
+        <option>Other</option>
       </select>
       <div class="section-title">Our Position Language</div>
       <textarea id="position-text" rows="6" placeholder="Paste or type your standard language for this position…" style="margin-bottom:4px;"></textarea>
       <div class="section-title" style="margin-top:4px;">Notes (optional)</div>
-      <input type="text" id="position-notes" placeholder="e.g. HARD NO, or fallback conditions…" style="margin-bottom:8px;" />
+      <input type="text" id="position-notes" placeholder="e.g. HARD NO, or fallback conditions…" style="margin-bottom:10px;" />
       <button class="btn btn-primary btn-full" onclick="savePosition()">Save Position</button>
     </div>
 
@@ -1435,8 +1399,10 @@ async function savePosition() {
 
 function selectCategory(el, cat) {
   uploadCategory = cat;
-  document.getElementById("file-upload-section").style.display = cat === "positions" ? "none" : "block";
-  document.getElementById("position-entry-section").style.display = cat === "positions" ? "block" : "none";
+  const isPos = cat === "positions";
+  document.getElementById("file-upload-section").style.display   = isPos ? "none"  : "block";
+  document.getElementById("position-entry-section").style.display = isPos ? "block" : "none";
+  document.getElementById("type-pills").style.display            = isPos ? "none"  : "flex";
   document.querySelectorAll("[data-cat]").forEach(p => p.classList.remove("active"));
   el.classList.add("active");
 }
