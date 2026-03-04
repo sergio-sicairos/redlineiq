@@ -1777,6 +1777,36 @@ function closeDistill() {
   document.getElementById("tab-resources").style.display = "block";
 }
 
+// ── Position field: 3-line clamp with expand/collapse ─────────────────────────
+function posField(id, label, text, textColor, labelColor) {
+  if (!text) return "";
+  const safe = safeStr(text).slice(0, 2000);
+  const needsToggle = safe.length > 80;
+  const clamp = "display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;";
+  return `<div style="margin-bottom:6px;">
+    <span style="font-size:11px;${labelColor?`color:${labelColor};`:""}font-weight:600;">${label}:</span>
+    <div id="${id}-t" style="font-size:11px;color:${textColor||"#cccccc"};line-height:1.5;margin-top:2px;${clamp}">${safe}</div>
+    ${needsToggle?`<span id="${id}-b" onclick="togglePosField('${id}')" style="font-size:10px;color:#555555;cursor:pointer;display:block;margin-top:2px;user-select:none;">expand</span>`:""}
+  </div>`;
+}
+
+function togglePosField(id) {
+  const el  = document.getElementById(id + "-t");
+  const btn = document.getElementById(id + "-b");
+  if (!el || !btn) return;
+  if (btn.textContent === "expand") {
+    el.style.display   = "block";
+    el.style.overflow  = "visible";
+    el.style.webkitLineClamp = "";
+    btn.textContent = "collapse";
+  } else {
+    el.style.display   = "-webkit-box";
+    el.style.overflow  = "hidden";
+    el.style.webkitLineClamp = "3";
+    btn.textContent = "expand";
+  }
+}
+
 // ── Position History ──────────────────────────────────────────────────────────
 async function showPositionHistory() {
   document.getElementById("tab-resources").style.display = "none";
@@ -1807,29 +1837,30 @@ async function showPositionHistory() {
     document.getElementById("position-history-list").innerHTML = categories.map(cat => {
       const cur = current.find(c => c.category === cat);
       const versions = byCategory[cat] || [];
+      const cId = cat.replace(/[^a-zA-Z0-9]/g, '-');
 
       const currentBlock = cur ? `
         <div style="background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.3);padding:10px;margin-bottom:6px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
             <span style="font-size:10px;font-weight:700;color:#16a34a;">● CURRENT</span>
             <span style="font-size:10px;color:#555;">${new Date(cur.createdAt||0).toLocaleDateString()}</span>
           </div>
-          ${cur.standardLang?`<div style="font-size:11px;color:#cccccc;margin-bottom:3px;"><strong style="color:#ffffff;">Standard:</strong> ${safeStr(cur.standardLang).slice(0,200)}</div>`:""}
-          ${cur.fallbackLang?`<div style="font-size:11px;color:#cccccc;margin-bottom:3px;"><strong style="color:#ffffff;">Fallback:</strong> ${safeStr(cur.fallbackLang).slice(0,150)}</div>`:""}
-          ${cur.hardLimit?`<div style="font-size:11px;color:#f5c842;margin-bottom:3px;"><strong>Hard Limit:</strong> ${safeStr(cur.hardLimit).slice(0,150)}</div>`:""}
-          ${cur.notes?`<div style="font-size:11px;color:#888;"><strong>Notes:</strong> ${safeStr(cur.notes).slice(0,150)}</div>`:""}
+          ${posField(`${cId}-cur-std`,   "Standard",   cur.standardLang, "#cccccc", "#ffffff")}
+          ${posField(`${cId}-cur-fall`,  "Fallback",   cur.fallbackLang, "#cccccc", "#ffffff")}
+          ${posField(`${cId}-cur-hl`,    "Hard Limit", cur.hardLimit,    "#f5c842", "")}
+          ${posField(`${cId}-cur-notes`, "Notes",      cur.notes,        "#888888", "")}
         </div>` : "";
 
       const historyBlocks = versions.map((v, vi) => `
         <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);padding:10px;margin-bottom:6px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
             <span style="font-size:10px;color:#555555;">v${versions.length - vi} — ${new Date(v.savedAt).toLocaleDateString()} ${new Date(v.savedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
             <button onclick="restorePosition(${JSON.stringify(v).replace(/"/g,'&quot;')})" style="font-size:10px;padding:2px 8px;background:rgba(224,32,32,0.15);border:1px solid rgba(224,32,32,0.4);color:#e02020;cursor:pointer;">Restore</button>
           </div>
-          ${v.standardLang?`<div style="font-size:11px;color:#888;margin-bottom:3px;"><strong style="color:#aaaaaa;">Standard:</strong> ${safeStr(v.standardLang).slice(0,200)}</div>`:""}
-          ${v.fallbackLang?`<div style="font-size:11px;color:#888;margin-bottom:3px;"><strong style="color:#aaaaaa;">Fallback:</strong> ${safeStr(v.fallbackLang).slice(0,150)}</div>`:""}
-          ${v.hardLimit?`<div style="font-size:11px;color:#888;margin-bottom:3px;"><strong style="color:#aaaaaa;">Hard Limit:</strong> ${safeStr(v.hardLimit).slice(0,150)}</div>`:""}
-          ${v.notes?`<div style="font-size:11px;color:#666;"><strong>Notes:</strong> ${safeStr(v.notes).slice(0,150)}</div>`:""}
+          ${posField(`${cId}-h${vi}-std`,   "Standard",   v.standardLang, "#888888", "#aaaaaa")}
+          ${posField(`${cId}-h${vi}-fall`,  "Fallback",   v.fallbackLang, "#888888", "#aaaaaa")}
+          ${posField(`${cId}-h${vi}-hl`,    "Hard Limit", v.hardLimit,    "#888888", "#aaaaaa")}
+          ${posField(`${cId}-h${vi}-notes`, "Notes",      v.notes,        "#666666", "")}
         </div>`).join("");
 
       return `<div class="card" style="margin-bottom:10px;">
