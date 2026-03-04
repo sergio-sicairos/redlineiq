@@ -766,7 +766,7 @@ async function startReview() {
 
     // 2. Build context — filter template to matching doc type
     const playbookCtx = (playbook.clauses||[]).map(c =>
-      `[${c.category}]\n  Standard: ${(c.standardLang||"").slice(0,300)}${c.fallbackLang?`\n  Fallback: ${c.fallbackLang.slice(0,200)}`:""}${c.hardLimit?`\n  Hard Limit (never accept): ${c.hardLimit}`:""}${c.notes?`\n  Notes: ${c.notes}`:""}`
+      `[${c.category}]\n  Standard: ${anonymizeForAI(c.standardLang||"").slice(0,300)}${c.fallbackLang?`\n  Fallback: ${anonymizeForAI(c.fallbackLang).slice(0,200)}`:""}${c.hardLimit?`\n  Hard Limit (never accept): ${anonymizeForAI(c.hardLimit)}`:""}${c.notes?`\n  Notes: ${anonymizeForAI(c.notes)}`:""}`
     ).join("\n\n");
 
     const matchingTemplates = (playbook.contracts||[]).filter(c =>
@@ -795,7 +795,7 @@ async function startReview() {
 ${reviewDocType} TEMPLATE (our standard):
 ${tplCtx||"No matching template loaded."}
 
-COMPLETED DEALS (past exceptions we accepted under negotiation pressure):
+OUR POSITIONS (standard language, fallback floors, and hard limits — no specific company context):
 ${playbookCtx||"None"}
 
 RULES — read carefully and follow exactly:
@@ -827,6 +827,9 @@ Do NOT set every finding to "flag". Use all four options based on the severity a
 
 RULE 7 — EXACT FIELDS.
 "sectionRef" = full section number as it appears (e.g. "8.2.1"). "found" = exact verbatim text from the submitted document, never paraphrased.
+
+RULE 8 — NO COMPANY NAMES IN OUTPUT.
+Never include specific company names, counterparty trade names, or customer names in any output field. Use generic terms only: "the counterparty", "the customer", "the vendor", "the parties". This prevents data from one deal from appearing in another.
 
 Return JSON only:
 {"overallRisk":"low|medium|high","summary":"2-3 sentences","clauses":[{"category":"","sectionRef":"","found":"EXACT verbatim","deviationFromTemplate":"","recommendation":"accept|negotiate|reject|flag","reasoning":"","suggestedLanguage":""}],"criticalIssues":[],"autoApprovable":true}`;
@@ -1683,7 +1686,7 @@ async function distillPositions() {
   status.innerHTML = '<span style="color:#888">Analyzing ' + completed.length + ' contract' + (completed.length > 1 ? 's' : '') + '…</span>';
 
   const contractsCtx = completed.map((c, i) =>
-    `--- CONTRACT ${i + 1}: ${c.name} (${c.type || "Unknown type"}) ---\n${c.text.slice(0, 8000)}`
+    `--- CONTRACT ${i + 1} (${c.type || "Unknown type"}) ---\n${anonymizeForAI(c.text.slice(0, 8000))}`
   ).join("\n\n");
 
   const sys = `You are a contract position analyst. Analyze the historical contracts provided and derive our company's standard positions for each clause category.
@@ -1693,6 +1696,8 @@ For each category, determine:
 - fallbackLang: The minimum we have accepted under pressure (our floor)
 - hardLimit: What we absolutely never accept
 - notes: Key conditions, context, or deal-size thresholds that affect leniency
+
+CRITICAL — NO COMPANY NAMES: Your output must never contain specific company names, trade names, or counterparty names from the contracts. All output must use only generic terms: "the customer", "the vendor", "the counterparty", "the parties". This is a hard requirement — company names must never appear in any output field.
 
 Base ONLY on the provided contracts. Do not invent positions. If a category has no evidence, set all fields to empty string.
 
@@ -1864,6 +1869,22 @@ async function restorePosition(entry) {
 function closePositionHistory() {
   document.getElementById("view-position-history").style.display = "none";
   document.getElementById("tab-resources").style.display = "block";
+}
+
+// ── Anonymize text before sending to AI ──────────────────────────────────────
+// Strips identifiable company/party names so customer data never cross-contaminates.
+// Applied to: completed deal text sent for distillation, and position context sent for review.
+function anonymizeForAI(text) {
+  if (!text) return text;
+  return text
+    // "Acme Corp", "BigBank, Inc.", "TechCo LLC", etc.
+    .replace(/\b[A-Z][A-Za-z&.\-]+(?:\s+[A-Z][A-Za-z&.\-]+){0,4}\s*,?\s*(?:Inc\b\.?|Corp\b\.?|LLC\b|Ltd\b\.?|L\.P\.|LP\b|LLP\b|Co\.\b|Company\b|Corporation\b|Limited\b|Group\b|Holdings\b|Technologies\b|Solutions\b|Services\b|Enterprises\b|Partners\b|Associates\b|International\b|Global\b|Systems\b)/g,
+      '[COMPANY]')
+    // Defined-term aliases: Acme ("Customer"), BigBank (the "Vendor")
+    .replace(/[A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)*\s+\((?:the\s+)?"(?:Customer|Vendor|Client|Contractor|Licensee|Licensor|Provider|Supplier|Buyer|Seller)"\)/g,
+      '[PARTY]')
+    // Collapse consecutive replacements
+    .replace(/\[COMPANY\](?:\s*(?:,|and|&)\s*\[COMPANY\])*/g, '[COMPANY]');
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
