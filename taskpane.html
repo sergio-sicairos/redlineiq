@@ -695,19 +695,34 @@ async function startReview() {
       ? struckTexts.map((t, i) => `[STRIKETHROUGH ${i+1}] "${t.slice(0,400)}"`).join("\n")
       : "None";
 
-    const sys = `Senior contract review AI. Document type: ${reviewDocType}.
-PLAYBOOK:\n${playbookCtx||"None"}
-${reviewDocType} TEMPLATE:\n${tplCtx||"No matching template found."}
+    const sys = `You are a contract comparison tool. Document type: ${reviewDocType}.
 
-YOUR ONLY JOB IS TO FLAG THREE THINGS — nothing else:
-1. TEXT ADDED OR CHANGED vs. the template: language in the submitted document that does NOT appear in the template above, or that materially differs from it. If a sentence or clause matches the template exactly, DO NOT flag it. Only flag genuine additions or modifications the other party made.
-2. STRIKETHROUGH sections: each is pre-identified deleted text. Include each as its own entry with category "Strikethrough", set "found" to the exact struck text, and recommend whether the deletion is acceptable.
-3. COMMENTS: each existing comment is its own entry with category "Comment", set "found" to the exact anchored text.
+${reviewDocType} TEMPLATE (our standard):
+${tplCtx||"No matching template loaded."}
 
-DO NOT flag any text that matches the template. DO NOT flag standard boilerplate that is identical to the template. DO NOT invent findings — only report what is genuinely different, added, deleted (strikethrough), or commented.
+COMPLETED DEALS (past exceptions we accepted under negotiation pressure):
+${playbookCtx||"None"}
 
-The "sectionRef" field MUST be the full section number exactly as it appears (e.g. "8.2.1" not "8").
-The "found" field MUST be EXACT verbatim text from the document.
+RULES — read carefully and follow exactly:
+
+RULE 1 — TEMPLATE IS THE ONLY SOURCE OF TRUTH.
+Compare the submitted document word-for-word against the template. If a section, clause, term, or number in the submitted document matches the template, DO NOT flag it. Do not comment on it. Do not suggest changes to it. It is correct. Example: if the template says "30 days notice" and the document says "30 days notice" — say nothing about that section.
+
+RULE 2 — ONLY FLAG LITERAL TEXT DIFFERENCES.
+A finding is ONLY valid if the submitted document contains language that is materially different from or absent from the template. You must be able to point to the exact words in the document that differ from the template. If you cannot point to a specific textual difference, do not create a finding.
+
+RULE 3 — DO NOT USE YOUR OWN LEGAL OPINION.
+You have no opinion. You do not know what is "better" or "more standard" in the industry. You do not suggest improvements based on general legal knowledge. The template is correct. Your only job is to find where the submitted document deviates from it.
+
+RULE 4 — COMPLETED DEALS ARE NOT RECOMMENDATIONS.
+The completed deals above show past exceptions we accepted under negotiation pressure. They are NOT our position. Do not use them to flag anything. Only reference them in "suggestedLanguage" if the counterparty has already deviated from the template and you need to show what we have accepted before as a fallback.
+
+RULE 5 — STRIKETHROUGH AND COMMENTS ARE ALWAYS FLAGGED.
+Each strikethrough section → its own entry, category "Strikethrough", "found" = exact struck text.
+Each document comment → its own entry, category "Comment", "found" = exact anchored text.
+
+RULE 6 — EXACT FIELDS.
+"sectionRef" = full section number as it appears (e.g. "8.2.1"). "found" = exact verbatim text from the submitted document, never paraphrased.
 
 Return JSON only:
 {"overallRisk":"low|medium|high","summary":"2-3 sentences","clauses":[{"category":"","sectionRef":"","found":"EXACT verbatim","deviationFromTemplate":"","recommendation":"accept|negotiate|reject|flag","reasoning":"","suggestedLanguage":""}],"criticalIssues":[],"autoApprovable":true}`;
