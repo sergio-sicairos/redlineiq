@@ -1219,41 +1219,70 @@ function normalizeForSearch(text) {
     .trim();
 }
 
+// Strips characters Word's search engine treats specially
+function cleanForWordSearch(text) {
+  return text
+    .replace(/[(){}\[\]\\^$|*+?.]/g, ' ') // Word search special chars → space
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Extract clean anchor windows of decreasing length from start of text
+function anchorCandidates(text, fromEnd) {
+  const lengths = [45, 35, 25, 15];
+  const base = fromEnd ? text.slice(-50) : text.slice(0, 50);
+  return lengths
+    .map(n => cleanForWordSearch(fromEnd ? base.slice(-n) : base.slice(0, n)))
+    .filter(s => s.length >= 10);
+}
+
 // Find the best range for a clause in the document.
 // Uses start+end anchor expansion for full coverage across paragraph boundaries.
 async function findClauseRange(context, foundText) {
   const norm = normalizeForSearch(foundText);
   if (norm.length < 10) return null;
 
-  // Try anchoring start and end separately, then expand between them
-  const startAnchor = norm.slice(0, 60).trim();
-  const endAnchor   = norm.slice(-60).trim();
+  const startCandidates = anchorCandidates(norm, false);
+  const endCandidates   = anchorCandidates(norm, true);
 
-  if (startAnchor.length > 10 && endAnchor.length > 10 && startAnchor !== endAnchor) {
-    try {
-      const sRes = context.document.body.search(startAnchor, { matchCase: false, matchWholeWord: false });
-      const eRes = context.document.body.search(endAnchor,   { matchCase: false, matchWholeWord: false });
-      sRes.load("items"); eRes.load("items");
-      await context.sync();
-      if (sRes.items.length > 0 && eRes.items.length > 0) {
-        return sRes.items[0].expandTo(eRes.items[0]);
-      }
-    } catch(_) { /* fall through to snippet search */ }
+  // Try start+end anchor expansion (handles multi-paragraph clauses)
+  for (const sa of startCandidates) {
+    for (const ea of endCandidates) {
+      if (sa === ea) continue;
+      try {
+        const sRes = context.document.body.search(sa, { matchCase: false, matchWholeWord: false });
+        const eRes = context.document.body.search(ea, { matchCase: false, matchWholeWord: false });
+        sRes.load("items"); eRes.load("items");
+        await context.sync();
+        if (sRes.items.length > 0 && eRes.items.length > 0) {
+          try {
+            const expanded = sRes.items[0].expandTo(eRes.items[0]);
+            await context.sync();
+            return expanded;
+          } catch(_) { return sRes.items[0]; }
+        }
+        // If only start found, return that
+        if (sRes.items.length > 0) return sRes.items[0];
+      } catch(_) { /* try next combination */ }
+    }
   }
 
-  // Fallback: progressive shorter snippets (single-paragraph)
-  const firstLine = norm.split(/\n/)[0];
-  const candidates = [
-    norm.slice(0, 255), norm.slice(0, 180),
-    firstLine.slice(0, 180), norm.slice(0, 120),
-    firstLine.slice(0, 120), norm.slice(0, 80), norm.slice(0, 50),
-  ].filter((v, i, arr) => v.length > 10 && arr.indexOf(v) === i);
+  // Fallback: try clean short snippets from different parts of the text
+  const mid = Math.floor(norm.length / 2);
+  const extras = [
+    cleanForWordSearch(norm.slice(0, 40)),
+    cleanForWordSearch(norm.slice(mid - 20, mid + 20)),
+    cleanForWordSearch(norm.slice(-40)),
+    cleanForWordSearch(norm.slice(0, 25)),
+  ].filter((v, i, arr) => v.length >= 10 && arr.indexOf(v) === i);
 
-  for (const snippet of candidates) {
-    const res = context.document.body.search(snippet, { matchCase: false, matchWholeWord: false });
-    res.load("items");
-    await context.sync();
-    if (res.items.length > 0) return res.items[0];
+  for (const snippet of extras) {
+    try {
+      const res = context.document.body.search(snippet, { matchCase: false, matchWholeWord: false });
+      res.load("items");
+      await context.sync();
+      if (res.items.length > 0) return res.items[0];
+    } catch(_) {}
   }
   return null;
 }
