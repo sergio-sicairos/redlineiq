@@ -675,16 +675,17 @@ async function startReview() {
   try {
     // 1. Extract document text, comments, and strikethrough in parallel
     setStep("Reading document…");
-    const [rawText, docComments, struckTexts] = await Promise.all([
+    const [rawText, docComments, struckTexts, coloredTexts] = await Promise.all([
       getDocumentText(),
       getDocumentComments(),
-      getStrikethroughTexts()
+      getStrikethroughTexts(),
+      getColoredTexts()
     ]);
     docText = rawText;
     lastDocComments = docComments;
     if (!docText.trim()) { alert("Document appears to be empty."); show("view-idle"); return; }
 
-    const commentLabel = `Analyzing ${reviewDocType}${docComments.length ? ` + ${docComments.length} comment${docComments.length > 1?"s":""}` : ""}${struckTexts.length ? ` + ${struckTexts.length} strikethrough` : ""}…`;
+    const commentLabel = `Analyzing ${reviewDocType}${docComments.length ? ` + ${docComments.length} comment${docComments.length > 1?"s":""}` : ""}${struckTexts.length ? ` + ${struckTexts.length} strikethrough` : ""}${coloredTexts.length ? ` + ${coloredTexts.length} added` : ""}…`;
     setStep(commentLabel);
 
     // 2. Build context — filter template to matching doc type
@@ -709,6 +710,10 @@ async function startReview() {
       ? struckTexts.map((t, i) => `[STRIKETHROUGH ${i+1}] "${t.slice(0,400)}"`).join("\n")
       : "None";
 
+    const coloredCtx = coloredTexts.length
+      ? coloredTexts.map((t, i) => `[ADDED TEXT ${i+1}] (${t.color}) "${t.text.slice(0,400)}"`).join("\n")
+      : "None";
+
     const sys = `You are a contract comparison tool. Document type: ${reviewDocType}.
 
 ${reviewDocType} TEMPLATE (our standard):
@@ -731,8 +736,9 @@ You have no opinion. You do not know what is "better" or "more standard" in the 
 RULE 4 — COMPLETED DEALS ARE NOT RECOMMENDATIONS.
 The completed deals above show past exceptions we accepted under negotiation pressure. They are NOT our position. Do not use them to flag anything. Only reference them in "suggestedLanguage" if the counterparty has already deviated from the template and you need to show what we have accepted before as a fallback.
 
-RULE 5 — STRIKETHROUGH AND COMMENTS ARE ALWAYS FLAGGED.
+RULE 5 — STRIKETHROUGH, ADDED TEXT, AND COMMENTS ARE ALWAYS FLAGGED.
 Each strikethrough section → its own entry, category "Strikethrough", "found" = exact struck text.
+Each colored/added text section → its own entry, category "Added Language", "found" = exact colored text. These are phrases the other party inserted (colored red, blue, etc.) that may or may not match the template — always flag them for review.
 Each document comment → its own entry, category "Comment", "found" = exact anchored text.
 
 RULE 6 — EXACT FIELDS.
@@ -741,7 +747,7 @@ RULE 6 — EXACT FIELDS.
 Return JSON only:
 {"overallRisk":"low|medium|high","summary":"2-3 sentences","clauses":[{"category":"","sectionRef":"","found":"EXACT verbatim","deviationFromTemplate":"","recommendation":"accept|negotiate|reject|flag","reasoning":"","suggestedLanguage":""}],"criticalIssues":[],"autoApprovable":true}`;
 
-    const userMsg = `Review this ${reviewDocType}:\n\n${docText.slice(0, 35000)}\n\nEXISTING DOCUMENT COMMENTS:\n${commentsCtx}\n\nSTRIKETHROUGH SECTIONS DETECTED IN DOCUMENT:\n${struckCtx}`;
+    const userMsg = `Review this ${reviewDocType}:\n\n${docText.slice(0, 35000)}\n\nEXISTING DOCUMENT COMMENTS:\n${commentsCtx}\n\nSTRIKETHROUGH SECTIONS DETECTED IN DOCUMENT:\n${struckCtx}\n\nCOLORED/ADDED TEXT DETECTED IN DOCUMENT (non-black font color — likely inserted by counterparty):\n${coloredCtx}`;
     const raw = await callClaude(sys, userMsg, 10000);
     const result = repairJSON(raw);
 
@@ -795,6 +801,75 @@ function getStrikethroughTexts() {
         resolve(struck);
       } catch(e) {
         console.warn("Strikethrough detection:", e.message);
+        resolve([]);
+      }
+    }).catch(() => resolve([]));
+  });
+}
+
+// ── Extract colored (added/tracked) text from the document ───────────────────
+// Treats any non-black, non-white font color as "added language" to review.
+function getColoredTexts() {
+  return new Promise(resolve => {
+    Word.run(async context => {
+      try {
+        const paras = context.document.body.paragraphs;
+        paras.load("items");
+        await context.sync();
+
+        paras.items.forEach(p => { p.load("text"); p.font.load("color"); });
+        await context.sync();
+
+        const isAdded = color => {
+          if (!color) return false;
+          const c = color.replace("#","").toLowerCase();
+          return c !== "" && c !== "auto" && c !== "000000" && c !== "ffffff";
+        };
+
+        const results = [];
+        const needsDeepScan = [];
+
+        for (const p of paras.items) {
+          if (!p.text.trim() || p.text.trim().length < 3) continue;
+          if (isAdded(p.font.color)) {
+            results.push({ text: p.text.trim(), color: p.font.color });
+          } else {
+            needsDeepScan.push(p);
+          }
+        }
+
+        // Batch word-level scan for paragraphs that may have partial coloring
+        if (needsDeepScan.length) {
+          const splitRanges = needsDeepScan.map(p => {
+            const r = p.getTextRanges([" ", "\t"], true);
+            r.load("items");
+            return r;
+          });
+          await context.sync();
+
+          splitRanges.forEach(r => r.items.forEach(item => {
+            item.load("text"); item.font.load("color");
+          }));
+          await context.sync();
+
+          for (const ranges of splitRanges) {
+            let group = [], groupColor = null;
+            for (const r of ranges.items) {
+              if (isAdded(r.font.color) && r.text.trim()) {
+                const c = r.font.color.replace("#","").toLowerCase();
+                if (!groupColor || c === groupColor) { group.push(r.text); groupColor = c; }
+                else { if (group.length) results.push({ text: group.join("").trim(), color: groupColor }); group = [r.text]; groupColor = c; }
+              } else {
+                if (group.length) { results.push({ text: group.join("").trim(), color: groupColor }); group = []; groupColor = null; }
+              }
+            }
+            if (group.length) results.push({ text: group.join("").trim(), color: groupColor });
+          }
+        }
+
+        resolve(results.filter(r => r.text.length > 3));
+      } catch(e) {
+        console.warn("Colored text detection:", e.message);
         resolve([]);
       }
     }).catch(() => resolve([]));
