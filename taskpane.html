@@ -428,10 +428,11 @@
       <button class="btn btn-primary btn-full" onclick="savePosition()">Save Position</button>
     </div>
 
-    <!-- Contract text (shown for Completed Docs) -->
+    <!-- Contract text (shown for Templates + Completed Docs) -->
     <div id="contract-text-section" style="display:none">
-      <div class="section-title" style="margin-top:4px;">Contract Text</div>
-      <textarea id="contract-text-input" rows="8" placeholder="Paste the full contract text here. This is used to distill positions from your deal history."></textarea>
+      <div class="section-title" style="margin-top:4px;" id="contract-text-label">Contract Text</div>
+      <div id="contract-text-hint" class="text-muted text-xs" style="margin-bottom:6px;"></div>
+      <textarea id="contract-text-input" rows="8" placeholder="Paste the full contract text here."></textarea>
     </div>
 
     <div id="upload-status" style="margin-top:8px;font-size:11px;"></div>
@@ -776,7 +777,7 @@ async function startReview() {
     ).join("\n\n");
 
     const matchingTemplates = (playbook.contracts||[]).filter(c =>
-      c.docRole === "template" &&
+      c.category === "templates" &&
       (c.type === reviewDocType || (c.name||"").toUpperCase().includes(reviewDocType))
     );
     const tplCtx = matchingTemplates
@@ -1466,11 +1467,22 @@ async function savePosition() {
 function selectCategory(el, cat) {
   uploadCategory = cat;
   const isPos = cat === "positions";
-  document.getElementById("file-upload-section").style.display   = isPos ? "none"  : "block";
+  const showText = cat === "completed" || cat === "templates";
+  document.getElementById("file-upload-section").style.display    = isPos ? "none"  : "block";
   document.getElementById("position-entry-section").style.display = isPos ? "block" : "none";
-  document.getElementById("type-pills").style.display            = isPos ? "none"  : "flex";
-  document.getElementById("contract-text-section").style.display = (cat === "completed") ? "block" : "none";
-  document.getElementById("upload-btn").textContent = (cat === "completed") ? "Save to Drive" : "Upload to Drive";
+  document.getElementById("type-pills").style.display             = isPos ? "none"  : "flex";
+  document.getElementById("contract-text-section").style.display  = showText ? "block" : "none";
+  document.getElementById("upload-btn").textContent = "Save to Drive";
+  if (showText) {
+    const isTemplate = cat === "templates";
+    document.getElementById("contract-text-label").textContent = isTemplate ? "Template Text" : "Contract Text";
+    document.getElementById("contract-text-hint").textContent  = isTemplate
+      ? "Paste the full template text — this is what the AI compares contracts against."
+      : "Paste the full contract text — used to distill positions from deal history.";
+    document.getElementById("contract-text-input").placeholder = isTemplate
+      ? "Paste your standard template text here…"
+      : "Paste the full contract text here…";
+  }
   document.querySelectorAll("[data-cat]").forEach(p => p.classList.remove("active"));
   el.classList.add("active");
 }
@@ -1483,11 +1495,14 @@ function selectType(el, type) {
 async function uploadDocument() {
   const fileInput = document.getElementById("upload-file-input");
   const file = fileInput.files[0];
-  const contractText = uploadCategory === "completed" ? document.getElementById("contract-text-input").value.trim() : "";
+  const contractText = (uploadCategory === "completed" || uploadCategory === "templates")
+    ? document.getElementById("contract-text-input").value.trim() : "";
 
-  // For completed docs, a file is optional — text alone is enough
-  if (uploadCategory !== "completed" && !file) { alert("Please select a file first."); return; }
+  // Validation
   if (uploadCategory === "completed" && !file && !contractText) { alert("Please paste contract text or select a file."); return; }
+  if (uploadCategory === "templates" && !file && !contractText) { alert("Please select a file or paste template text."); return; }
+  if (uploadCategory !== "completed" && uploadCategory !== "templates" && !file) { alert("Please select a file first."); return; }
+  if (uploadCategory === "templates" && !contractText) { alert("Please paste the template text — it's needed for AI contract review."); return; }
 
   const btn = document.getElementById("upload-btn");
   const status = document.getElementById("upload-status");
