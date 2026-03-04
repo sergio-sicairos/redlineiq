@@ -411,10 +411,14 @@
         <option>SLA / Uptime</option>
         <option>Other</option>
       </select>
-      <div class="section-title">Our Position Language</div>
-      <textarea id="position-text" rows="6" placeholder="Paste or type your standard language for this position…" style="margin-bottom:4px;"></textarea>
-      <div class="section-title" style="margin-top:4px;">Notes (optional)</div>
-      <input type="text" id="position-notes" placeholder="e.g. HARD NO, or fallback conditions…" style="margin-bottom:10px;" />
+      <div class="section-title">Standard Language</div>
+      <textarea id="position-text" rows="4" placeholder="Our preferred language — what we push for in every deal…" style="margin-bottom:8px;"></textarea>
+      <div class="section-title">Fallback Language</div>
+      <textarea id="position-fallback" rows="3" placeholder="The minimum we'll accept under pressure (our floor)…" style="margin-bottom:8px;"></textarea>
+      <div class="section-title">Hard Limit</div>
+      <input type="text" id="position-hardlimit" placeholder="What we never accept — absolute no…" style="margin-bottom:8px;" />
+      <div class="section-title">Notes / Conditions</div>
+      <input type="text" id="position-notes" placeholder="e.g. Only accept 60 days for enterprise deals over $500k…" style="margin-bottom:12px;" />
       <button class="btn btn-primary btn-full" onclick="savePosition()">Save Position</button>
     </div>
 
@@ -748,8 +752,8 @@ async function startReview() {
 
     // 2. Build context — filter template to matching doc type
     const playbookCtx = (playbook.clauses||[]).map(c =>
-      `[${c.category}] ${c.position}: ${(c.standardLang||"").slice(0,300)}${c.notes?` | ${c.notes}`:""}`
-    ).join("\n");
+      `[${c.category}]\n  Standard: ${(c.standardLang||"").slice(0,300)}${c.fallbackLang?`\n  Fallback: ${c.fallbackLang.slice(0,200)}`:""}${c.hardLimit?`\n  Hard Limit (never accept): ${c.hardLimit}`:""}${c.notes?`\n  Notes: ${c.notes}`:""}`
+    ).join("\n\n");
 
     const matchingTemplates = (playbook.contracts||[]).filter(c =>
       c.docRole === "template" &&
@@ -1388,36 +1392,39 @@ function switchTab(tab) {
 // ── Upload ────────────────────────────────────────────────────────────────────
 function onPositionSelect() {
   const sel = document.getElementById("position-select").value;
-  // Pre-fill from existing playbook clause if one exists
   if (sel && playbook.clauses) {
     const existing = playbook.clauses.find(c => c.category === sel);
-    if (existing) {
-      document.getElementById("position-text").value = existing.standardLang || "";
-      document.getElementById("position-notes").value = existing.notes || "";
-    }
+    document.getElementById("position-text").value     = existing?.standardLang || "";
+    document.getElementById("position-fallback").value = existing?.fallbackLang || "";
+    document.getElementById("position-hardlimit").value = existing?.hardLimit   || "";
+    document.getElementById("position-notes").value    = existing?.notes        || "";
   }
 }
 
 async function savePosition() {
-  const category = document.getElementById("position-select").value;
-  const lang = document.getElementById("position-text").value.trim();
-  const notes = document.getElementById("position-notes").value.trim();
+  const category    = document.getElementById("position-select").value;
+  const standardLang = document.getElementById("position-text").value.trim();
+  const fallbackLang = document.getElementById("position-fallback").value.trim();
+  const hardLimit    = document.getElementById("position-hardlimit").value.trim();
+  const notes        = document.getElementById("position-notes").value.trim();
   const status = document.getElementById("upload-status");
-  if (!category) { status.innerHTML = '<span style="color:#ef4444">Please select a position.</span>'; return; }
-  if (!lang) { status.innerHTML = '<span style="color:#ef4444">Please enter position language.</span>'; return; }
+  if (!category) { status.innerHTML = '<span style="color:#ef4444">Please select a position type.</span>'; return; }
+  if (!standardLang) { status.innerHTML = '<span style="color:#ef4444">Please enter standard language.</span>'; return; }
   status.innerHTML = '<span style="color:#888">Saving…</span>';
   try {
     if (!playbook.clauses) playbook.clauses = [];
     const idx = playbook.clauses.findIndex(c => c.category === category);
-    const entry = { id: idx >= 0 ? playbook.clauses[idx].id : Date.now().toString(), category, position: "negotiate", standardLang: lang, fallbackLang: "", notes, createdAt: new Date().toISOString() };
+    const entry = { id: idx >= 0 ? playbook.clauses[idx].id : Date.now().toString(), category, position: "negotiate", standardLang, fallbackLang, hardLimit, notes, createdAt: new Date().toISOString() };
     if (idx >= 0) playbook.clauses[idx] = entry;
     else playbook.clauses.push(entry);
     await writeDriveFile("playbook.json", playbook.clauses);
     renderPlaybookSummary();
     status.innerHTML = '<span style="color:#22c55e">✓ Position saved.</span>';
-    document.getElementById("position-text").value = "";
-    document.getElementById("position-notes").value = "";
-    document.getElementById("position-select").value = "";
+    document.getElementById("position-select").value    = "";
+    document.getElementById("position-text").value      = "";
+    document.getElementById("position-fallback").value  = "";
+    document.getElementById("position-hardlimit").value = "";
+    document.getElementById("position-notes").value     = "";
   } catch(e) {
     status.innerHTML = `<span style="color:#ef4444">Error: ${e.message}</span>`;
   }
