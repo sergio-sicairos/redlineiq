@@ -1241,42 +1241,12 @@ function anchorCandidates(text, fromEnd) {
 async function findClauseRange(context, foundText) {
   const norm = normalizeForSearch(foundText);
   if (norm.length < 10) return null;
+  const clean = cleanForWordSearch(norm);
 
-  const startCandidates = anchorCandidates(norm, false);
-  const endCandidates   = anchorCandidates(norm, true);
-
-  // Try start+end anchor expansion (handles multi-paragraph clauses)
-  for (const sa of startCandidates) {
-    for (const ea of endCandidates) {
-      if (sa === ea) continue;
-      try {
-        const sRes = context.document.body.search(sa, { matchCase: false, matchWholeWord: false });
-        const eRes = context.document.body.search(ea, { matchCase: false, matchWholeWord: false });
-        sRes.load("items"); eRes.load("items");
-        await context.sync();
-        if (sRes.items.length > 0 && eRes.items.length > 0) {
-          try {
-            const expanded = sRes.items[0].expandTo(eRes.items[0]);
-            await context.sync();
-            return expanded;
-          } catch(_) { return sRes.items[0]; }
-        }
-        // If only start found, return that
-        if (sRes.items.length > 0) return sRes.items[0];
-      } catch(_) { /* try next combination */ }
-    }
-  }
-
-  // Fallback: try clean short snippets from different parts of the text
-  const mid = Math.floor(norm.length / 2);
-  const extras = [
-    cleanForWordSearch(norm.slice(0, 40)),
-    cleanForWordSearch(norm.slice(mid - 20, mid + 20)),
-    cleanForWordSearch(norm.slice(-40)),
-    cleanForWordSearch(norm.slice(0, 25)),
-  ].filter((v, i, arr) => v.length >= 10 && arr.indexOf(v) === i);
-
-  for (const snippet of extras) {
+  // 1. Try direct snippet search — works for single-paragraph clauses
+  for (const len of [200, 140, 90, 60]) {
+    const snippet = clean.slice(0, len);
+    if (snippet.length < 10) continue;
     try {
       const res = context.document.body.search(snippet, { matchCase: false, matchWholeWord: false });
       res.load("items");
@@ -1284,6 +1254,52 @@ async function findClauseRange(context, foundText) {
       if (res.items.length > 0) return res.items[0];
     } catch(_) {}
   }
+
+  // 2. Start anchor + forward-search for end anchor (handles multi-paragraph clauses)
+  //    By searching for the end anchor only within the range AFTER the start anchor,
+  //    we guarantee we pick the correct end occurrence and not one earlier in the doc.
+  const startAnchors = [
+    cleanForWordSearch(norm.slice(0, 45)),
+    cleanForWordSearch(norm.slice(0, 35)),
+    cleanForWordSearch(norm.slice(0, 25)),
+  ].filter(s => s.length >= 10);
+
+  const endAnchors = [
+    cleanForWordSearch(norm.slice(-45)),
+    cleanForWordSearch(norm.slice(-35)),
+    cleanForWordSearch(norm.slice(-25)),
+  ].filter(s => s.length >= 10);
+
+  for (const sa of startAnchors) {
+    try {
+      const sRes = context.document.body.search(sa, { matchCase: false, matchWholeWord: false });
+      sRes.load("items");
+      await context.sync();
+      if (sRes.items.length === 0) continue;
+      const startRange = sRes.items[0];
+
+      // Search for end anchor only forward from start range
+      for (const ea of endAnchors) {
+        if (ea === sa) continue;
+        try {
+          const bodyEnd = context.document.body.getRange('End');
+          const fwdRange = startRange.expandTo(bodyEnd);
+          const eRes = fwdRange.search(ea, { matchCase: false, matchWholeWord: false });
+          eRes.load("items");
+          await context.sync();
+          if (eRes.items.length > 0) {
+            try {
+              return startRange.expandTo(eRes.items[0]);
+            } catch(_) {}
+          }
+        } catch(_) {}
+      }
+
+      // End anchor not found — return just the start range
+      return startRange;
+    } catch(_) {}
+  }
+
   return null;
 }
 
