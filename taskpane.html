@@ -695,17 +695,19 @@ async function startReview() {
       ? struckTexts.map((t, i) => `[STRIKETHROUGH ${i+1}] "${t.slice(0,400)}"`).join("\n")
       : "None";
 
-    const sys = `Senior contract review AI. Document type being reviewed: ${reviewDocType}.
+    const sys = `Senior contract review AI. Document type: ${reviewDocType}.
 PLAYBOOK:\n${playbookCtx||"None"}
-${reviewDocType} TEMPLATE:\n${tplCtx||"No matching template found — flag any clauses that deviate from standard ${reviewDocType} terms."}
+${reviewDocType} TEMPLATE:\n${tplCtx||"No matching template found."}
 
-IMPORTANT INSTRUCTIONS:
-1. Do an EXACT comparison of the submitted document against the ${reviewDocType} template above. Any clause, section, or language present in the submitted document that differs from or is absent in the template MUST be flagged as a separate "found" entry.
-2. Any section in the template that is MISSING from the submitted document must also be flagged.
-3. Each STRIKETHROUGH section in the document is pre-identified deleted text — include each as its own clause entry with category "Strikethrough", set "found" to the exact struck text, and recommend whether the deletion is acceptable.
-4. Each EXISTING COMMENT must be its own clause entry with category "Comment", set "found" to the anchored text, and give a recommendation.
-5. The "sectionRef" field MUST be the full section number exactly as it appears (e.g. "8.2.1" not "8").
-6. The "found" field MUST be EXACT verbatim text from the document.
+YOUR ONLY JOB IS TO FLAG THREE THINGS — nothing else:
+1. TEXT ADDED OR CHANGED vs. the template: language in the submitted document that does NOT appear in the template above, or that materially differs from it. If a sentence or clause matches the template exactly, DO NOT flag it. Only flag genuine additions or modifications the other party made.
+2. STRIKETHROUGH sections: each is pre-identified deleted text. Include each as its own entry with category "Strikethrough", set "found" to the exact struck text, and recommend whether the deletion is acceptable.
+3. COMMENTS: each existing comment is its own entry with category "Comment", set "found" to the exact anchored text.
+
+DO NOT flag any text that matches the template. DO NOT flag standard boilerplate that is identical to the template. DO NOT invent findings — only report what is genuinely different, added, deleted (strikethrough), or commented.
+
+The "sectionRef" field MUST be the full section number exactly as it appears (e.g. "8.2.1" not "8").
+The "found" field MUST be EXACT verbatim text from the document.
 
 Return JSON only:
 {"overallRisk":"low|medium|high","summary":"2-3 sentences","clauses":[{"category":"","sectionRef":"","found":"EXACT verbatim","deviationFromTemplate":"","recommendation":"accept|negotiate|reject|flag","reasoning":"","suggestedLanguage":""}],"criticalIssues":[],"autoApprovable":true}`;
