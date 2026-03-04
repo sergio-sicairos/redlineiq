@@ -847,6 +847,14 @@ function renderResults(result) {
     return clause;
   });
 
+  // Sort clauses by their position in the document (top to bottom)
+  const docNorm = normalizeForSearch(docText).toLowerCase();
+  reviewClauses.sort((a, b) => {
+    const posA = docNorm.indexOf(normalizeForSearch(a.found || "").toLowerCase().slice(0, 80));
+    const posB = docNorm.indexOf(normalizeForSearch(b.found || "").toLowerCase().slice(0, 80));
+    return (posA === -1 ? Infinity : posA) - (posB === -1 ? Infinity : posB);
+  });
+
   // Risk badge
   const rC = {low:"#22c55e",medium:"#f59e0b",high:"#ef4444"};
   const riskBadge = document.getElementById("risk-badge");
