@@ -1139,6 +1139,10 @@ function renderClauses() {
   const container = document.getElementById("clauses-list");
   container.innerHTML = reviewClauses.map((c,i) => {
     const dec = c.userDecision || c.recommendation;
+    const matchPos = c.suggestedLanguage
+      ? (playbook.clauses||[]).find(p => p.category && c.category &&
+          p.category.toLowerCase().trim() === c.category.toLowerCase().trim())
+      : null;
     return `
     <div class="clause-card ${dec}" id="clause-${i}">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:6px;">
@@ -1179,8 +1183,12 @@ function renderClauses() {
       ${c.deviationFromTemplate?`<div style="font-size:11px;color:#d97706;margin-bottom:4px;">⚠ ${safeStr(c.deviationFromTemplate).slice(0,100)}</div>`:""}
       <div style="font-size:11px;color:#cccccc;line-height:1.5;margin-bottom:6px;">${safeStr(c.reasoning).slice(0,150)}</div>
       ${c.suggestedLanguage?`
-        <div style="font-size:11px;color:#cccccc;background:rgba(255,255,255,0.03);padding:7px;margin-bottom:6px;line-height:1.4;border:1px solid rgba(255,255,255,0.15);border-left:2px solid rgba(224,32,32,0.7);">
-          <strong style="color:#ffffff">Suggested:</strong> ${safeStr(c.suggestedLanguage).slice(0,160)}
+        <div style="font-size:11px;color:#cccccc;background:rgba(255,255,255,0.03);padding:7px;margin-bottom:6px;line-height:1.4;border:1px solid rgba(255,255,255,0.15);border-left:2px solid rgba(224,32,32,0.7);position:relative;">
+          <strong style="color:#ffffff">Suggested:</strong> ${escHtml(safeStr(c.suggestedLanguage).slice(0,160))}
+          ${matchPos ? `<span class="info-icon" style="margin-left:6px;">i<span class="info-tip">${
+            escHtml("Position: " + safeStr(matchPos.category) +
+              (matchPos.standard ? " — Standard: " + safeStr(matchPos.standard).slice(0,120) : ""))
+          }</span></span>` : ""}
         </div>
       `:""}
       <div class="decision-btns">
@@ -1190,9 +1198,7 @@ function renderClauses() {
         `).join("")}
       </div>
       ${c.userDecision && !c.applied ? `
-        <button onclick="completeDecision(${i})" style="margin-top:8px;width:100%;padding:7px;border:1px solid rgba(224,32,32,0.5);background:rgba(224,32,32,0.82);color:#fff;font-size:12px;font-weight:600;cursor:pointer;">
-          Complete
-        </button>
+        <button class="btn btn-primary btn-full" style="margin-top:8px;" onclick="completeDecision(${i})">Complete</button>
       ` : ""}
       ${c.applied ? `<div style="font-size:10px;color:#555555;margin-top:6px;">✓ Applied to document</div>` : ""}
     </div>`;
