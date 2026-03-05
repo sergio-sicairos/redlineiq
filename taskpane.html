@@ -331,6 +331,7 @@
       <img class="spinner" src="gavel_red_transparent.gif" alt="" style="width:80px;height:80px;margin:0 auto 12px;display:block;">
       <div style="font-weight:600;margin-bottom:6px;color:#ffffff;">Analyzing Document</div>
       <div id="review-step" class="text-muted text-xs">Reading document text…</div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:16px;" onclick="cancelReview()">Cancel</button>
     </div>
   </div>
 
@@ -751,6 +752,8 @@ function setStep(msg) {
   if (el) el.textContent = msg;
 }
 function resetToIdle() { show("view-idle"); }
+let _reviewCancelled = false;
+function cancelReview() { _reviewCancelled = true; show("view-idle"); }
 
 // ── Playbook summary ─────────────────────────────────────────────────────────
 function renderPlaybookSummary() {
@@ -771,21 +774,28 @@ function renderPlaybookSummary() {
 
 // ── Review flow ───────────────────────────────────────────────────────────────
 async function startReview() {
+  _reviewCancelled = false;
   show("view-reviewing");
   setStep("Reading document text…");
 
   const withTimeout = (p, ms, fallback) => Promise.race([p, new Promise(r => setTimeout(() => r(fallback), ms))]);
 
+  // Global safety net: force back to idle after 3 minutes no matter what
+  const globalTimer = setTimeout(() => {
+    if (!_reviewCancelled) { alert("Review timed out. Try again."); show("view-idle"); }
+  }, 180000);
+
   try {
     // 1. Extract document text, comments, and strikethrough in parallel
     setStep("Reading document…");
     const [rawText, docComments, struckTexts, coloredTexts, trackedInserts] = await Promise.all([
-      withTimeout(getDocumentText(),       15000, ""),
-      withTimeout(getDocumentComments(),   8000,  []),
-      withTimeout(getStrikethroughTexts(), 8000,  []),
-      withTimeout(getColoredTexts(),       8000,  []),
-      withTimeout(getTrackedInsertions(),  5000,  []),
+      withTimeout(getDocumentText(),       6000, ""),
+      withTimeout(getDocumentComments(),   4000, []),
+      withTimeout(getStrikethroughTexts(), 4000, []),
+      withTimeout(getColoredTexts(),       4000, []),
+      withTimeout(getTrackedInsertions(),  3000, []),
     ]);
+    if (_reviewCancelled) return;
     docText = rawText;
     lastDocComments = docComments;
     const allAdded = [...coloredTexts, ...trackedInserts];
@@ -885,8 +895,9 @@ Return JSON only:
     show("view-results");
 
   } catch(e) {
-    alert("Review failed: " + e.message);
-    show("view-idle");
+    if (!_reviewCancelled) { alert("Review failed: " + e.message); show("view-idle"); }
+  } finally {
+    clearTimeout(globalTimer);
   }
 }
 
@@ -1031,23 +1042,13 @@ function getDocumentComments() {
   return new Promise((resolve) => {
     Word.run(async (context) => {
       try {
-        // Use document.getComments() — the correct API (body.getComments() is non-standard)
-        const coll = context.document.getComments();
+        const coll = context.document.body.getComments();
         coll.load("items/content,items/authorName,items/resolved");
         await context.sync();
-
-        if (!coll.items.length) { resolve([]); return; }
-
-        // Batch load all ranges in a single sync to avoid per-comment hangs
-        const ranges = coll.items.map(c => {
-          try { const r = c.getRange(); r.load("text"); return r; } catch(e) { return null; }
-        });
-        try { await context.sync(); } catch(e) { /* ranges may be unavailable */ }
-
-        const out = coll.items.map((c, i) => ({
+        const out = coll.items.map(c => ({
           author:       c.authorName || "Reviewer",
           content:      c.content    || "",
-          anchoredText: (ranges[i] && ranges[i].text) || "",
+          anchoredText: "",   // skipped — getRange() causes hangs
           resolved:     c.resolved
         }));
         resolve(out);
@@ -1055,7 +1056,7 @@ function getDocumentComments() {
         console.warn("getDocumentComments error:", e.message);
         resolve([]);
       }
-    }).catch(e => { console.warn("Word.run comments error:", e.message); resolve([]); });
+    }).catch(() => resolve([]));
   });
 }
 
