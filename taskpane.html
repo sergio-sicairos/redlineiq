@@ -788,11 +788,11 @@ async function startReview() {
     // 1. Extract document text, comments, and strikethrough in parallel
     setStep(capVibe(_vibe) + " the document…");
     const [rawText, docComments, struckTexts, coloredTexts, trackedInserts] = await Promise.all([
-      getDocumentText(),
-      withTimeout(getDocumentComments(),   8000, []),
-      withTimeout(getStrikethroughTexts(), 8000, []),
-      withTimeout(getColoredTexts(),       8000, []),
-      withTimeout(getTrackedInsertions(),  5000, []),
+      withTimeout(getDocumentText(),       15000, ""),
+      withTimeout(getDocumentComments(),   8000,  []),
+      withTimeout(getStrikethroughTexts(), 8000,  []),
+      withTimeout(getColoredTexts(),       8000,  []),
+      withTimeout(getTrackedInsertions(),  5000,  []),
     ]);
     docText = rawText;
     lastDocComments = docComments;
@@ -1420,21 +1420,35 @@ async function driveWriteFile(token, folderId, filename, data) {
 async function callClaude(system, user, maxTokens = 4096) {
   const key = await getApiKey();
   if (!key) throw new Error("No API key set. Click ⚙ to add your Anthropic key.");
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": key,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify({
-      model: MODEL, max_tokens: maxTokens,
-      system, messages: [{ role:"user", content: user }]
-    })
-  });
-  const d = await r.json();
-  return (d.content||[]).map(b=>b.text||"").join("\n");
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 180000); // 3-minute hard timeout
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      signal: ctrl.signal,
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: MODEL, max_tokens: maxTokens,
+        system, messages: [{ role:"user", content: user }]
+      })
+    });
+    clearTimeout(timer);
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(`API error ${r.status}: ${err.error?.message || r.statusText}`);
+    }
+    const d = await r.json();
+    return (d.content||[]).map(b=>b.text||"").join("\n");
+  } catch(e) {
+    clearTimeout(timer);
+    if (e.name === "AbortError") throw new Error("Review timed out — try a smaller document or check your connection.");
+    throw e;
+  }
 }
 
 
