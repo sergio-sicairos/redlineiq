@@ -786,7 +786,7 @@ async function startReview() {
 
   // Global safety net: force back to idle after 3 minutes no matter what
   const globalTimer = setTimeout(() => {
-    if (!_reviewCancelled) { alert("Review timed out. Try again."); show("view-idle"); }
+    if (!_reviewCancelled) { setStep("Timed out — try again."); setTimeout(() => show("view-idle"), 3000); }
   }, 180000);
 
   try {
@@ -807,6 +807,7 @@ async function startReview() {
 
     const scanLabel = `Analyzing ${reviewDocType}${docComments.length ? ` + ${docComments.length} comment${docComments.length>1?"s":""}` : ""}${struckTexts.length ? ` + ${struckTexts.length} strikethrough` : ""}${allAdded.length ? ` + ${allAdded.length} added` : ""}…`;
     setStep(scanLabel);
+    await new Promise(r => setTimeout(r, 50)); // force repaint before sync block
 
     // 2. Build context — filter template to matching doc type
     const playbookCtx = (playbook.clauses||[]).map(c =>
@@ -906,7 +907,11 @@ Return JSON only:
     show("view-results");
 
   } catch(e) {
-    if (!_reviewCancelled) { alert("Review failed: " + e.message); show("view-idle"); }
+    if (!_reviewCancelled) {
+      setStep("Error: " + e.message);
+      await new Promise(r => setTimeout(r, 4000));
+      show("view-idle");
+    }
   } finally {
     clearTimeout(globalTimer);
   }
