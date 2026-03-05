@@ -79,6 +79,15 @@
     .clause-card.negotiate { border-left-color:#eab308; }
     .clause-card.reject    { border-left-color:#e02020; }
     .clause-card.flag      { border-left-color:#f97316; }
+    .found-box {
+      cursor:pointer; padding:6px 8px; margin-bottom:4px;
+      border:1px solid rgba(255,255,255,0.08); border-radius:3px;
+      background:rgba(255,255,255,0.02);
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .found-box:hover { background:rgba(59,130,246,0.08); border-color:rgba(59,130,246,0.35); }
+    .clause-card.nav-active { outline:1px solid rgba(59,130,246,0.55); box-shadow:0 0 12px rgba(59,130,246,0.12); }
+    .clause-card.nav-active .found-box { background:rgba(59,130,246,0.1); border-color:rgba(59,130,246,0.45); }
     .decision-btns { display:flex; gap:4px; flex-wrap:wrap; margin-top:8px; }
     .decision-btn {
       padding:4px 9px; font-size:11px; font-weight:600; cursor:pointer;
@@ -1113,13 +1122,11 @@ function renderClauses() {
               : `Source: Deviation from ${reviewDocType} template${c.deviationFromTemplate ? " — " + safeStr(c.deviationFromTemplate).slice(0,120) : ""}`
         }</span></span>
       </div>
-      <div style="font-size:11px;color:#777777;margin-bottom:4px;">
-        <span style="cursor:pointer;" onclick="navigateToClause(${i})" title="Click to jump to this clause in the document">
-          <strong style="color:#cccccc">Found:</strong>
-          <span id="found-text-${i}">${safeStr(c.found).length > 120 ? safeStr(c.found).slice(0,120) + "…" : safeStr(c.found)}</span>
-        </span>
-        ${safeStr(c.found).length > 120 ? `<span style="color:#e02020;font-size:10px;margin-left:6px;cursor:pointer;" onclick="toggleFoundText(${i})" id="expand-btn-${i}">expand</span>` : ""}
+      <div class="found-box" onclick="navigateToClause(${i})" title="Click to jump to this section in the document">
+        <div style="font-size:10px;color:#555555;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Found in document</div>
+        <span id="found-text-${i}" style="font-size:11px;color:#cccccc;">${safeStr(c.found).length > 120 ? safeStr(c.found).slice(0,120) + "…" : safeStr(c.found)}</span>
       </div>
+      ${safeStr(c.found).length > 120 ? `<span style="color:#e02020;font-size:10px;cursor:pointer;display:block;margin-bottom:4px;" onclick="toggleFoundText(${i})" id="expand-btn-${i}">expand</span>` : ""}
       ${c.deviationFromTemplate?`<div style="font-size:11px;color:#d97706;margin-bottom:4px;">⚠ ${safeStr(c.deviationFromTemplate).slice(0,100)}</div>`:""}
       <div style="font-size:11px;color:#cccccc;line-height:1.5;margin-bottom:6px;">${safeStr(c.reasoning).slice(0,150)}</div>
       ${c.suggestedLanguage?`
@@ -1694,15 +1701,28 @@ async function findClauseRange(context, foundText) {
   return null;
 }
 
-function navigateToClause(idx) {
+let _navGen = 0;
+async function navigateToClause(idx) {
+  const gen = ++_navGen;
   const foundText = (reviewClauses[idx] && reviewClauses[idx].found) || "";
   if (!foundText) return;
-  Word.run(async (context) => {
-    const range = await findClauseRange(context, foundText);
-    if (!range) return;
-    range.select();
-    await context.sync();
-  }).catch(e => console.warn("Could not navigate:", e.message));
+
+  // Highlight active card immediately
+  document.querySelectorAll(".clause-card").forEach(el => el.classList.remove("nav-active"));
+  const card = document.getElementById("clause-" + idx);
+  if (card) card.classList.add("nav-active");
+
+  try {
+    await Word.run(async (context) => {
+      if (gen !== _navGen) return; // Superseded by a newer click
+      const range = await findClauseRange(context, foundText);
+      if (gen !== _navGen || !range) return;
+      range.select();
+      await context.sync();
+    });
+  } catch(e) {
+    console.warn("Could not navigate:", e.message);
+  }
 }
 
 // ── Position Distillation ─────────────────────────────────────────────────────
