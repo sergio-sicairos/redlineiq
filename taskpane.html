@@ -290,7 +290,7 @@
 <!-- Loading screen -->
 <div id="loading-screen">
   <img class="spinner" src="gavel_red_transparent.gif" alt="">
-  <div id="step-indicator">Initializing Office…</div>
+  <div id="step-indicator">Warming up the grill…</div>
 </div>
 
 <!-- Main content (hidden until ready) -->
@@ -321,7 +321,7 @@
     </div>
     <div class="card">
       <div class="section-title">Playbook Summary</div>
-      <div id="playbook-summary" class="text-muted text-xs">Loading from Drive…</div>
+      <div id="playbook-summary" class="text-muted text-xs">Fetching the goods…</div>
     </div>
   </div>
 
@@ -329,7 +329,7 @@
   <div id="view-reviewing" style="display:none">
     <div class="card" style="text-align:center;padding:28px;">
       <img class="spinner" src="gavel_red_transparent.gif" alt="" style="width:80px;height:80px;margin:0 auto 12px;display:block;">
-      <div style="font-weight:600;margin-bottom:6px;color:#ffffff;">Analyzing Document</div>
+      <div id="review-header" style="font-weight:600;margin-bottom:6px;color:#ffffff;">Analyzing Document</div>
       <div id="review-step" class="text-muted text-xs">Reading document text…</div>
     </div>
   </div>
@@ -464,7 +464,7 @@
 
   <div id="resources-loading" style="text-align:center;padding:30px;">
     <img class="spinner" src="gavel_red_transparent.gif" alt="" style="display:block;margin:0 auto 10px;">
-    <div class="text-xs text-muted">Loading from Drive…</div>
+    <div id="resources-loading-text" class="text-xs text-muted">Fetching the goods…</div>
   </div>
 
   <div id="resources-content" style="display:none;">
@@ -745,6 +745,11 @@ function show(id) {
     document.getElementById(v).style.display = v === id ? "block" : "none";
   });
 }
+const _vibes = ["swagging","rizzing","baking","frying","roasting","grilling","saucing up","marinating","seasoning","flambéing","deep frying","smoking","braising","simmering","glazing","torching","spicing up","slow cooking","wok tossing","drizzling"];
+const _vibe = () => _vibes[Math.floor(Math.random() * _vibes.length)];
+const capitalizeFirst = s => s.charAt(0).toUpperCase() + s.slice(1);
+let _sessionVibe = _vibe();
+
 function setStep(msg) {
   document.getElementById("step-indicator").textContent = msg;
   const el = document.getElementById("review-step");
@@ -771,12 +776,15 @@ function renderPlaybookSummary() {
 
 // ── Review flow ───────────────────────────────────────────────────────────────
 async function startReview() {
+  _sessionVibe = _vibe();
+  const reviewHeader = document.getElementById("review-header");
+  if (reviewHeader) reviewHeader.textContent = capitalizeFirst(_sessionVibe) + " the contract…";
   show("view-reviewing");
-  setStep("Reading document text…");
+  setStep(capitalizeFirst(_sessionVibe) + " the document…");
 
   try {
     // 1. Extract document text, comments, and strikethrough in parallel
-    setStep("Reading document…");
+    setStep(capitalizeFirst(_sessionVibe) + " the document…");
     const [rawText, docComments, struckTexts, coloredTexts, trackedInserts] = await Promise.all([
       getDocumentText(),
       getDocumentComments(),
@@ -789,7 +797,7 @@ async function startReview() {
     const allAdded = [...coloredTexts, ...trackedInserts];
     if (!docText.trim()) { alert("Document appears to be empty."); show("view-idle"); return; }
 
-    const scanLabel = `Analyzing ${reviewDocType}${docComments.length ? ` + ${docComments.length} comment${docComments.length>1?"s":""}` : ""}${struckTexts.length ? ` + ${struckTexts.length} strikethrough` : ""}${allAdded.length ? ` + ${allAdded.length} added` : ""}…`;
+    const scanLabel = capitalizeFirst(_sessionVibe) + ` ${reviewDocType}${docComments.length ? ` + ${docComments.length} comment${docComments.length>1?"s":""}` : ""}${struckTexts.length ? ` + ${struckTexts.length} strikethrough` : ""}${allAdded.length ? ` + ${allAdded.length} added` : ""}…`;
     setStep(scanLabel);
 
     // 2. Build context — filter template to matching doc type
@@ -878,7 +886,7 @@ Return JSON only:
     const raw = await callClaude(sys, userMsg, 10000);
     const result = repairJSON(raw);
 
-    setStep("Done.");
+    setStep("Done " + _sessionVibe + ".");
     renderResults(result);
     show("view-results");
 
@@ -1614,6 +1622,8 @@ async function driveUploadFile(token, folderId, file) {
 
 // ── Resources ─────────────────────────────────────────────────────────────────
 async function loadResources() {
+  const rlt = document.getElementById("resources-loading-text");
+  if (rlt) rlt.textContent = capitalizeFirst(_vibe()) + " the resources…";
   document.getElementById("resources-loading").style.display = "block";
   document.getElementById("resources-content").style.display = "none";
   document.getElementById("resources-empty").style.display = "none";
@@ -1790,7 +1800,7 @@ async function distillPositions() {
     return;
   }
 
-  status.innerHTML = '<span style="color:#888">Analyzing ' + completed.length + ' contract' + (completed.length > 1 ? 's' : '') + '…</span>';
+  status.innerHTML = '<span style="color:#888">' + capitalizeFirst(_vibe()) + ' ' + completed.length + ' contract' + (completed.length > 1 ? 's' : '') + '…</span>';
 
   const contractsCtx = completed.map((c, i) =>
     `--- CONTRACT ${i + 1} (${c.type || "Unknown type"}) ---\n${anonymizeForAI(c.text.slice(0, 8000))}`
