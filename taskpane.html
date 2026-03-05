@@ -74,7 +74,9 @@
       background:#111111; border:1px solid rgba(255,255,255,0.15);
       padding:12px; margin-bottom:8px;
       border-left: 3px solid #ffffff;
+      cursor:pointer; transition: background 0.15s;
     }
+    .clause-card:hover { background:#181818; }
     .clause-card.accept    { border-left-color:#22c55e; }
     .clause-card.negotiate { border-left-color:#eab308; }
     .clause-card.reject    { border-left-color:#e02020; }
@@ -1151,7 +1153,7 @@ function renderClauses() {
   container.innerHTML = reviewClauses.map((c,i) => {
     const dec = c.userDecision || c.recommendation;
     return `
-    <div class="clause-card ${dec}" id="clause-${i}">
+    <div class="clause-card ${dec}" id="clause-${i}" onclick="cardClick(event,${i})">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:6px;">
         <div style="display:flex;gap:5px;flex-wrap:wrap;">
           ${c._isComment
@@ -1736,6 +1738,39 @@ async function findClauseRange(context, foundText) {
 }
 
 let _navGen = 0;
+function cardClick(event, idx) {
+  // Ignore clicks on interactive children
+  if (event.target.closest('button, .info-icon, .found-box, span[onclick]')) return;
+
+  const card = document.getElementById("clause-" + idx);
+  if (!card) return;
+
+  // Toggle: second click on same card removes the highlight
+  if (card.classList.contains("nav-active")) {
+    card.classList.remove("nav-active");
+    return;
+  }
+
+  // Apply border highlight
+  document.querySelectorAll(".clause-card").forEach(el => el.classList.remove("nav-active"));
+  card.classList.add("nav-active");
+
+  // Navigate in document if there's text to jump to
+  const c = reviewClauses[idx];
+  if (!c) return;
+  const searchText = c._isComment ? (c._commentAnchor || "") : (c.found || "");
+  if (!searchText.trim()) return; // comment without anchor — border change only
+
+  const gen = ++_navGen;
+  Word.run(async (context) => {
+    if (gen !== _navGen) return;
+    const range = await findClauseRange(context, searchText);
+    if (gen !== _navGen || !range) return;
+    range.select();
+    await context.sync();
+  }).catch(() => {});
+}
+
 function navigateToClause(idx) {
   const gen = ++_navGen;
   const clause = reviewClauses[idx];
