@@ -782,15 +782,17 @@ async function startReview() {
   if (rh) rh.textContent = capVibe(_vibe) + " the contract…";
   setStep(capVibe(_vibe) + " the document…");
 
+  const withTimeout = (p, ms, fallback) => Promise.race([p, new Promise(r => setTimeout(() => r(fallback), ms))]);
+
   try {
     // 1. Extract document text, comments, and strikethrough in parallel
     setStep(capVibe(_vibe) + " the document…");
     const [rawText, docComments, struckTexts, coloredTexts, trackedInserts] = await Promise.all([
       getDocumentText(),
-      getDocumentComments(),
-      getStrikethroughTexts(),
-      getColoredTexts(),
-      getTrackedInsertions()
+      withTimeout(getDocumentComments(),   8000, []),
+      withTimeout(getStrikethroughTexts(), 8000, []),
+      withTimeout(getColoredTexts(),       8000, []),
+      withTimeout(getTrackedInsertions(),  5000, []),
     ]);
     docText = rawText;
     lastDocComments = docComments;
@@ -972,9 +974,9 @@ function getColoredTexts() {
           }
         }
 
-        // Batch word-level scan for paragraphs that may have partial coloring
+        // Batch word-level scan — cap at 60 paragraphs to avoid hanging on large docs
         if (needsDeepScan.length) {
-          const splitRanges = needsDeepScan.map(p => {
+          const splitRanges = needsDeepScan.slice(0, 60).map(p => {
             const r = p.getTextRanges([" ", "\t"], true);
             r.load("items");
             return r;
