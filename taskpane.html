@@ -329,7 +329,7 @@
   <div id="view-reviewing" style="display:none">
     <div class="card" style="text-align:center;padding:28px;">
       <img class="spinner" src="gavel_red_transparent.gif" alt="" style="width:80px;height:80px;margin:0 auto 12px;display:block;">
-      <div id="review-header" style="font-weight:600;margin-bottom:6px;color:#ffffff;">Analyzing Document</div>
+      <div style="font-weight:600;margin-bottom:6px;color:#ffffff;">Analyzing Document</div>
       <div id="review-step" class="text-muted text-xs">Reading document text…</div>
     </div>
   </div>
@@ -745,11 +745,6 @@ function show(id) {
     document.getElementById(v).style.display = v === id ? "block" : "none";
   });
 }
-const _vibes = ["swagging","rizzing","baking","frying","roasting","grilling","saucing up","marinating","seasoning","smoking","braising","glazing","torching","spicing up","slow cooking","drizzling"];
-function pickVibe() { return _vibes[Math.floor(Math.random() * _vibes.length)]; }
-function capVibe(v) { return v.charAt(0).toUpperCase() + v.slice(1); }
-let _vibe = pickVibe();
-
 function setStep(msg) {
   document.getElementById("step-indicator").textContent = msg;
   const el = document.getElementById("review-step");
@@ -776,30 +771,25 @@ function renderPlaybookSummary() {
 
 // ── Review flow ───────────────────────────────────────────────────────────────
 async function startReview() {
-  _vibe = pickVibe();
   show("view-reviewing");
-  const rh = document.getElementById("review-header");
-  if (rh) rh.textContent = capVibe(_vibe) + " the contract…";
-  setStep(capVibe(_vibe) + " the document…");
-
-  const withTimeout = (p, ms, fallback) => Promise.race([p, new Promise(r => setTimeout(() => r(fallback), ms))]);
+  setStep("Reading document text…");
 
   try {
     // 1. Extract document text, comments, and strikethrough in parallel
-    setStep(capVibe(_vibe) + " the document…");
+    setStep("Reading document…");
     const [rawText, docComments, struckTexts, coloredTexts, trackedInserts] = await Promise.all([
-      withTimeout(getDocumentText(),       15000, ""),
-      withTimeout(getDocumentComments(),   8000,  []),
-      withTimeout(getStrikethroughTexts(), 8000,  []),
-      withTimeout(getColoredTexts(),       8000,  []),
-      withTimeout(getTrackedInsertions(),  5000,  []),
+      getDocumentText(),
+      getDocumentComments(),
+      getStrikethroughTexts(),
+      getColoredTexts(),
+      getTrackedInsertions()
     ]);
     docText = rawText;
     lastDocComments = docComments;
     const allAdded = [...coloredTexts, ...trackedInserts];
     if (!docText.trim()) { alert("Document appears to be empty."); show("view-idle"); return; }
 
-    const scanLabel = capVibe(_vibe) + ` ${reviewDocType}${docComments.length ? ` + ${docComments.length} comment${docComments.length>1?"s":""}` : ""}${struckTexts.length ? ` + ${struckTexts.length} strikethrough` : ""}${allAdded.length ? ` + ${allAdded.length} added` : ""}…`;
+    const scanLabel = `Analyzing ${reviewDocType}${docComments.length ? ` + ${docComments.length} comment${docComments.length>1?"s":""}` : ""}${struckTexts.length ? ` + ${struckTexts.length} strikethrough` : ""}${allAdded.length ? ` + ${allAdded.length} added` : ""}…`;
     setStep(scanLabel);
 
     // 2. Build context — filter template to matching doc type
@@ -816,7 +806,7 @@ async function startReview() {
           || equivTypes.some(t => cName.includes(t));
     });
     const tplCtx = matchingTemplates
-      .map(c=>`[TEMPLATE ${reviewDocType}] ${c.name}:\n${(c.text||"").slice(0,15000)}`).join("\n\n");
+      .map(c=>`[TEMPLATE ${reviewDocType}] ${c.name}:\n${(c.text||"").slice(0,30000)}`).join("\n\n");
 
     const commentsCtx = docComments.length
       ? docComments.map((c, i) =>
@@ -883,12 +873,11 @@ Never include specific company names, counterparty trade names, or customer name
 Return JSON only:
 {"overallRisk":"low|medium|high","summary":"2-3 sentences","clauses":[{"category":"","sectionRef":"","found":"EXACT verbatim","deviationFromTemplate":"","recommendation":"accept|negotiate|reject|flag","reasoning":"","suggestedLanguage":""}],"criticalIssues":[],"autoApprovable":true}`;
 
-    const userMsg = `Review this ${reviewDocType}:\n\n${docText.slice(0, 20000)}\n\nEXISTING DOCUMENT COMMENTS:\n${commentsCtx}\n\nSTRIKETHROUGH SECTIONS DETECTED IN DOCUMENT:\n${struckCtx}\n\nCOLORED/ADDED TEXT DETECTED IN DOCUMENT (non-black font color — likely inserted by counterparty):\n${coloredCtx}`;
-    setStep("Sending to AI…");
-    const raw = await callClaude(sys, userMsg, 6000);
+    const userMsg = `Review this ${reviewDocType}:\n\n${docText.slice(0, 35000)}\n\nEXISTING DOCUMENT COMMENTS:\n${commentsCtx}\n\nSTRIKETHROUGH SECTIONS DETECTED IN DOCUMENT:\n${struckCtx}\n\nCOLORED/ADDED TEXT DETECTED IN DOCUMENT (non-black font color — likely inserted by counterparty):\n${coloredCtx}`;
+    const raw = await callClaude(sys, userMsg, 10000);
     const result = repairJSON(raw);
 
-    setStep("Done " + _vibe + ".");
+    setStep("Done.");
     renderResults(result);
     show("view-results");
 
@@ -975,9 +964,9 @@ function getColoredTexts() {
           }
         }
 
-        // Batch word-level scan — cap at 60 paragraphs to avoid hanging on large docs
+        // Batch word-level scan for paragraphs that may have partial coloring
         if (needsDeepScan.length) {
-          const splitRanges = needsDeepScan.slice(0, 60).map(p => {
+          const splitRanges = needsDeepScan.map(p => {
             const r = p.getTextRanges([" ", "\t"], true);
             r.load("items");
             return r;
@@ -1150,10 +1139,6 @@ function renderClauses() {
   const container = document.getElementById("clauses-list");
   container.innerHTML = reviewClauses.map((c,i) => {
     const dec = c.userDecision || c.recommendation;
-    const matchPos = c.suggestedLanguage
-      ? (playbook.clauses||[]).find(p => p.category && c.category &&
-          p.category.toLowerCase().trim() === c.category.toLowerCase().trim())
-      : null;
     return `
     <div class="clause-card ${dec}" id="clause-${i}">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:6px;">
@@ -1194,12 +1179,8 @@ function renderClauses() {
       ${c.deviationFromTemplate?`<div style="font-size:11px;color:#d97706;margin-bottom:4px;">⚠ ${safeStr(c.deviationFromTemplate).slice(0,100)}</div>`:""}
       <div style="font-size:11px;color:#cccccc;line-height:1.5;margin-bottom:6px;">${safeStr(c.reasoning).slice(0,150)}</div>
       ${c.suggestedLanguage?`
-        <div style="font-size:11px;color:#cccccc;background:rgba(255,255,255,0.03);padding:7px;margin-bottom:6px;line-height:1.4;border:1px solid rgba(255,255,255,0.15);border-left:2px solid rgba(224,32,32,0.7);position:relative;">
-          <strong style="color:#ffffff">Suggested:</strong> ${escHtml(safeStr(c.suggestedLanguage).slice(0,160))}
-          ${matchPos ? `<span class="info-icon" style="margin-left:6px;">i<span class="info-tip">${
-            escHtml("Position: " + safeStr(matchPos.category) +
-              (matchPos.standard ? " — Standard: " + safeStr(matchPos.standard).slice(0,120) : ""))
-          }</span></span>` : ""}
+        <div style="font-size:11px;color:#cccccc;background:rgba(255,255,255,0.03);padding:7px;margin-bottom:6px;line-height:1.4;border:1px solid rgba(255,255,255,0.15);border-left:2px solid rgba(224,32,32,0.7);">
+          <strong style="color:#ffffff">Suggested:</strong> ${safeStr(c.suggestedLanguage).slice(0,160)}
         </div>
       `:""}
       <div class="decision-btns">
@@ -1209,7 +1190,9 @@ function renderClauses() {
         `).join("")}
       </div>
       ${c.userDecision && !c.applied ? `
-        <button class="btn btn-primary btn-full" style="margin-top:8px;" onclick="completeDecision(${i})">Complete</button>
+        <button onclick="completeDecision(${i})" style="margin-top:8px;width:100%;padding:7px;border:1px solid rgba(224,32,32,0.5);background:rgba(224,32,32,0.82);color:#fff;font-size:12px;font-weight:600;cursor:pointer;">
+          Complete
+        </button>
       ` : ""}
       ${c.applied ? `<div style="font-size:10px;color:#555555;margin-top:6px;">✓ Applied to document</div>` : ""}
     </div>`;
@@ -1421,35 +1404,21 @@ async function driveWriteFile(token, folderId, filename, data) {
 async function callClaude(system, user, maxTokens = 4096) {
   const key = await getApiKey();
   if (!key) throw new Error("No API key set. Click ⚙ to add your Anthropic key.");
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 180000); // 3-minute hard timeout
-  try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      signal: ctrl.signal,
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: MODEL, max_tokens: maxTokens,
-        system, messages: [{ role:"user", content: user }]
-      })
-    });
-    clearTimeout(timer);
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      throw new Error(`API error ${r.status}: ${err.error?.message || r.statusText}`);
-    }
-    const d = await r.json();
-    return (d.content||[]).map(b=>b.text||"").join("\n");
-  } catch(e) {
-    clearTimeout(timer);
-    if (e.name === "AbortError") throw new Error("Review timed out — try a smaller document or check your connection.");
-    throw e;
-  }
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: JSON.stringify({
+      model: MODEL, max_tokens: maxTokens,
+      system, messages: [{ role:"user", content: user }]
+    })
+  });
+  const d = await r.json();
+  return (d.content||[]).map(b=>b.text||"").join("\n");
 }
 
 
