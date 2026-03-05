@@ -783,15 +783,19 @@ async function startReview() {
   if (rh) rh.textContent = capVibe(_vibe) + " the contract…";
   setStep(capVibe(_vibe) + " the document…");
 
+  // Resolves to fallback value if promise takes longer than ms
+  const withTimeout = (p, ms, fallback) => Promise.race([p, new Promise(r => setTimeout(() => r(fallback), ms))]);
+
   try {
     // 1. Extract document text, comments, and strikethrough in parallel
+    // Each scanner has an individual timeout so a hung API call can't freeze the whole review
     setStep(capVibe(_vibe) + " the document…");
     const [rawText, docComments, struckTexts, coloredTexts, trackedInserts] = await Promise.all([
       getDocumentText(),
-      getDocumentComments(),
-      getStrikethroughTexts(),
-      getColoredTexts(),
-      getTrackedInsertions()
+      withTimeout(getDocumentComments(),   8000, []),
+      withTimeout(getStrikethroughTexts(), 8000, []),
+      withTimeout(getColoredTexts(),       8000, []),
+      withTimeout(getTrackedInsertions(),  5000, []),
     ]);
     docText = rawText;
     lastDocComments = docComments;
@@ -974,8 +978,10 @@ function getColoredTexts() {
         }
 
         // Batch word-level scan for paragraphs that may have partial coloring
-        if (needsDeepScan.length) {
-          const splitRanges = needsDeepScan.map(p => {
+        // Cap at 60 paragraphs — large docs make this extremely slow
+        const deepScanBatch = needsDeepScan.slice(0, 60);
+        if (deepScanBatch.length) {
+          const splitRanges = deepScanBatch.map(p => {
             const r = p.getTextRanges([" ", "\t"], true);
             r.load("items");
             return r;
@@ -987,7 +993,7 @@ function getColoredTexts() {
           }));
           await context.sync();
 
-          for (const ranges of splitRanges) {
+          for (const ranges of splitRanges.filter(r => r.items)) {
             let group = [], groupColor = null;
             for (const r of ranges.items) {
               if (isAdded(r.font.color) && r.text.trim()) {
@@ -1038,7 +1044,7 @@ function getDocumentComments() {
     Word.run(async (context) => {
       try {
         // Load items + their scalar properties in one pass
-        const coll = context.document.body.getComments();
+        const coll = context.document.getComments();
         coll.load("items/content,items/authorName,items/resolved");
         await context.sync();
 
