@@ -832,8 +832,9 @@ async function startReview() {
         const clause = await withTimeout(reviewSingleItem(item, posCtx, reviewDocType), 30000, null);
         completed++;
         setStep(`Reviewing ${completed} of ${items.length}…`);
-        if (!clause) return { category: item.type, found: item.text.slice(0,300), recommendation: "flag", reasoning: "Timed out", sectionRef: "", suggestedLanguage: "", deviationFromTemplate: "" };
+        if (!clause) return { _signalType: item.type, category: "", found: item.text.slice(0,300), recommendation: "flag", reasoning: "Timed out", sectionRef: "", suggestedLanguage: "", deviationFromTemplate: "" };
         if (!clause.found) clause.found = item.text.slice(0, 300);
+        clause._signalType = item.type;
         return clause;
       }));
       clauses.push(...results);
@@ -1140,28 +1141,19 @@ function renderClauses() {
     const dec = c.userDecision || c.recommendation;
     return `
     <div class="clause-card ${dec}" id="clause-${i}" onclick="cardClick(event,${i})">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:6px;">
-        <div style="display:flex;gap:5px;flex-wrap:wrap;">
-          ${{
-            "Comment":          `<span class="badge" style="background:rgba(255,255,255,0.08);color:#ffffff;border:1px solid rgba(255,255,255,0.25)">💬 Comment</span>`,
-            "Added Language":   `<span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)">＋ Added Language</span>`,
-            "Removed Language": `<span class="badge" style="background:rgba(224,32,32,0.1);color:#e02020;border:1px solid rgba(224,32,32,0.4)">− Removed Language</span>`,
-          }[c.category] || `<span class="badge" style="background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.4)">${escHtml(safeStr(c.category))}</span>`}
-          ${c.sectionRef?`<span class="badge" style="background:rgba(59,130,246,0.07);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);cursor:pointer;" onclick="navigateToSection('${escHtml(safeStr(c.sectionRef))}')" title="Click to jump to this section">§ ${escHtml(safeStr(c.sectionRef))}</span>`:""}
-          <span class="badge" style="${{
-            accept:    'background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)',
-            negotiate: 'background:rgba(234,179,8,0.1);color:#eab308;border:1px solid rgba(234,179,8,0.4)',
-            reject:    'background:rgba(224,32,32,0.1);color:#e02020;border:1px solid rgba(224,32,32,0.4)',
-            flag:      'background:rgba(249,115,22,0.1);color:#f97316;border:1px solid rgba(249,115,22,0.4)',
-          }[c.recommendation] || 'background:rgba(255,255,255,0.03);color:#888888;border:1px solid rgba(255,255,255,0.15)'}">AI: ${{negotiate:'Counter'}[c.recommendation]||safeStr(c.recommendation)}</span>
-        </div>
-        <span class="info-icon">i<span class="info-tip">${
-          c.category === "Strikethrough"
-            ? "Source: Strikethrough text detected in document"
-            : c.category === "Added Language"
-              ? "Source: Colored/added text detected in document"
-              : `Source: Deviation from ${reviewDocType} template${c.deviationFromTemplate ? " — " + escHtml(safeStr(c.deviationFromTemplate).slice(0,120)) : ""}`
-        }</span></span>
+      <div style="display:flex;align-items:flex-start;gap:5px;flex-wrap:wrap;margin-bottom:6px;">
+        ${{
+          "Comment":          `<span class="badge" style="background:rgba(255,255,255,0.08);color:#ffffff;border:1px solid rgba(255,255,255,0.25)">💬 Comment</span>`,
+          "Added Language":   `<span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)">＋ Added Language</span>`,
+          "Removed Language": `<span class="badge" style="background:rgba(224,32,32,0.1);color:#e02020;border:1px solid rgba(224,32,32,0.4)">− Removed Language</span>`,
+        }[c._signalType] || `<span class="badge" style="background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.4)">${escHtml(safeStr(c._signalType||c.category))}</span>`}
+        ${(()=>{ const _SIGNAL_TYPES = ["Comment","Added Language","Removed Language"]; const ref = safeStr(c.sectionRef); const cat = _SIGNAL_TYPES.includes(c.category) ? "" : safeStr(c.category); const label = [ref, cat].filter(Boolean).join(" "); return label ? `<span class="badge" style="background:rgba(59,130,246,0.07);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);cursor:pointer;" onclick="event.stopPropagation();navigateToSection('${escHtml(ref)}')" title="Jump to section">${escHtml(label)}</span>` : ""; })()}
+        <span class="badge" style="${{
+          accept:    'background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)',
+          negotiate: 'background:rgba(234,179,8,0.1);color:#eab308;border:1px solid rgba(234,179,8,0.4)',
+          reject:    'background:rgba(224,32,32,0.1);color:#e02020;border:1px solid rgba(224,32,32,0.4)',
+          flag:      'background:rgba(249,115,22,0.1);color:#f97316;border:1px solid rgba(249,115,22,0.4)',
+        }[c.recommendation] || 'background:rgba(255,255,255,0.03);color:#888888;border:1px solid rgba(255,255,255,0.15)'}">${{accept:"Accept",negotiate:"Counter",reject:"Reject",flag:"Flag"}[c.recommendation]||safeStr(c.recommendation)}</span>
       </div>
       ${c._isComment && c._commentContent ? `
       <div class="found-box" onclick="navigateToClause(${i})" title="Click to jump to comment location in document">
