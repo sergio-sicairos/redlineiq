@@ -1435,7 +1435,11 @@ async function callClaude(system, user, maxTokens = 4096) {
     });
     if (!r.ok) {
       const errBody = await r.json().catch(() => ({}));
-      throw new Error(`API ${r.status}: ${errBody.error?.message || r.statusText}`);
+      const msg = errBody.error?.message || r.statusText;
+      if (r.status === 401) throw new Error("Invalid API key — check your Anthropic key in settings.");
+      if (r.status === 402 || (msg||"").toLowerCase().includes("credit")) throw new Error("Out of Anthropic credits — add credits at console.anthropic.com.");
+      if (r.status === 429) throw new Error("Rate limited — wait a moment and try again.");
+      throw new Error(`API error ${r.status}: ${msg}`);
     }
     const d = await r.json();
     if (d.error) throw new Error(d.error.message || JSON.stringify(d.error));
