@@ -816,7 +816,7 @@ async function startReview() {
           || equivTypes.some(t => cName.includes(t));
     });
     const tplCtx = matchingTemplates
-      .map(c=>`[TEMPLATE ${reviewDocType}] ${c.name}:\n${(c.text||"").slice(0,30000)}`).join("\n\n");
+      .map(c=>`[TEMPLATE ${reviewDocType}] ${c.name}:\n${(c.text||"").slice(0,15000)}`).join("\n\n");
 
     const commentsCtx = docComments.length
       ? docComments.map((c, i) =>
@@ -883,8 +883,9 @@ Never include specific company names, counterparty trade names, or customer name
 Return JSON only:
 {"overallRisk":"low|medium|high","summary":"2-3 sentences","clauses":[{"category":"","sectionRef":"","found":"EXACT verbatim","deviationFromTemplate":"","recommendation":"accept|negotiate|reject|flag","reasoning":"","suggestedLanguage":""}],"criticalIssues":[],"autoApprovable":true}`;
 
-    const userMsg = `Review this ${reviewDocType}:\n\n${docText.slice(0, 35000)}\n\nEXISTING DOCUMENT COMMENTS:\n${commentsCtx}\n\nSTRIKETHROUGH SECTIONS DETECTED IN DOCUMENT:\n${struckCtx}\n\nCOLORED/ADDED TEXT DETECTED IN DOCUMENT (non-black font color — likely inserted by counterparty):\n${coloredCtx}`;
-    const raw = await callClaude(sys, userMsg, 10000);
+    const userMsg = `Review this ${reviewDocType}:\n\n${docText.slice(0, 20000)}\n\nEXISTING DOCUMENT COMMENTS:\n${commentsCtx}\n\nSTRIKETHROUGH SECTIONS DETECTED IN DOCUMENT:\n${struckCtx}\n\nCOLORED/ADDED TEXT DETECTED IN DOCUMENT (non-black font color — likely inserted by counterparty):\n${coloredCtx}`;
+    setStep("Sending to AI…");
+    const raw = await callClaude(sys, userMsg, 6000);
     const result = repairJSON(raw);
 
     setStep("Done " + _vibe + ".");
