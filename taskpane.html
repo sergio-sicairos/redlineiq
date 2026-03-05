@@ -1095,9 +1095,9 @@ function renderClauses() {
         <div style="display:flex;gap:5px;flex-wrap:wrap;">
           ${c._isComment
             ? `<span class="badge" style="background:rgba(255,255,255,0.08);color:#ffffff;border:1px solid rgba(255,255,255,0.25)">💬 Comment</span>`
-            : `<span class="badge" style="background:rgba(255,255,255,0.06);color:#cccccc;border:1px solid rgba(255,255,255,0.22)">${safeStr(c.category)}</span>`
+            : `<span class="badge" style="background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.4)">${safeStr(c.category)}</span>`
           }
-          ${c.sectionRef?`<span class="badge" style="background:rgba(255,255,255,0.04);color:#aaaaaa;border:1px solid rgba(255,255,255,0.18)">§ ${safeStr(c.sectionRef)}</span>`:""}
+          ${c.sectionRef?`<span class="badge" style="background:rgba(59,130,246,0.07);color:#3b82f6;border:1px solid rgba(59,130,246,0.3)">§ ${safeStr(c.sectionRef)}</span>`:""}
           <span class="badge" style="${{
             accept:    'background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)',
             negotiate: 'background:rgba(234,179,8,0.1);color:#eab308;border:1px solid rgba(234,179,8,0.4)',
