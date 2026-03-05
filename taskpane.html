@@ -1139,10 +1139,32 @@ function renderClauses() {
   const container = document.getElementById("clauses-list");
   container.innerHTML = reviewClauses.map((c,i) => {
     const dec = c.userDecision || c.recommendation;
-    const matchPos = c.suggestedLanguage
-      ? (playbook.clauses||[]).find(p => p.category && c.category &&
-          p.category.toLowerCase().trim() === c.category.toLowerCase().trim())
-      : null;
+    const matchPos = (playbook.clauses||[]).find(p => p.category && c.category &&
+      p.category.toLowerCase().trim() === c.category.toLowerCase().trim());
+    const rec = c.recommendation;
+    const recLabel = {accept:"Accept",negotiate:"Counter",reject:"Reject",flag:"Flag"}[rec] || safeStr(rec);
+    let reasonText;
+    if (c.category === "Strikethrough") {
+      reasonText = recLabel + " — strikethrough text detected in document";
+    } else if (c.category === "Added Language") {
+      reasonText = recLabel + " — added/colored text detected in document";
+    } else if (matchPos) {
+      const posReasons = {
+        accept:    recLabel + " — within standard position for " + safeStr(matchPos.category),
+        negotiate: recLabel + " — outside standard; fallback language applies for " + safeStr(matchPos.category),
+        reject:    recLabel + " — exceeds hard limit for " + safeStr(matchPos.category),
+        flag:      recLabel + " — ambiguous deviation from " + safeStr(matchPos.category) + " position",
+      };
+      reasonText = posReasons[rec] || recLabel + " — based on " + safeStr(matchPos.category) + " position";
+    } else {
+      const tmplReasons = {
+        accept:    recLabel + " — follows template language",
+        negotiate: recLabel + " — deviates from template; standard language available",
+        reject:    recLabel + " — significant deviation from template",
+        flag:      recLabel + " — unclear deviation; manual review needed",
+      };
+      reasonText = tmplReasons[rec] || recLabel + " — based on template review";
+    }
     return `
     <div class="clause-card ${dec}" id="clause-${i}">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:6px;">
@@ -1159,13 +1181,7 @@ function renderClauses() {
             flag:      'background:rgba(249,115,22,0.1);color:#f97316;border:1px solid rgba(249,115,22,0.4)',
           }[c.recommendation] || 'background:rgba(255,255,255,0.03);color:#888888;border:1px solid rgba(255,255,255,0.15)'}">AI: ${{negotiate:'Counter'}[c.recommendation]||safeStr(c.recommendation)}</span>
         </div>
-        <span class="info-icon">i<span class="info-tip">${
-          c.category === "Strikethrough"
-            ? "Source: Strikethrough text detected in document"
-            : c.category === "Added Language"
-              ? "Source: Colored/added text detected in document"
-              : `Source: Deviation from ${reviewDocType} template${c.deviationFromTemplate ? " — " + escHtml(safeStr(c.deviationFromTemplate).slice(0,120)) : ""}`
-        }</span></span>
+        <span class="info-icon">i<span class="info-tip">${escHtml(reasonText)}</span></span>
       </div>
       ${c._isComment && c._commentContent ? `
       <div class="found-box" onclick="navigateToClause(${i})" title="Click to jump to comment location in document">
