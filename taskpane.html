@@ -771,15 +771,17 @@ async function startReview() {
   try {
     // 1. Extract document text, comments, and strikethrough in parallel
     setStep("Reading document…");
-    const [rawText, struckTexts, coloredTexts] = await Promise.all([
+    const [rawText, docComments, struckTexts, coloredTexts] = await Promise.all([
       getDocumentText(),
+      getDocumentComments(),
       getStrikethroughTexts(),
       getColoredTexts()
     ]);
     docText = rawText;
+    lastDocComments = docComments;
     if (!docText.trim()) { alert("Document appears to be empty."); show("view-idle"); return; }
 
-    const scanLabel = `Analyzing ${reviewDocType}${struckTexts.length ? ` + ${struckTexts.length} strikethrough` : ""}${coloredTexts.length ? ` + ${coloredTexts.length} added` : ""}…`;
+    const scanLabel = `Analyzing ${reviewDocType}${docComments.length ? ` + ${docComments.length} comment${docComments.length>1?"s":""}` : ""}${struckTexts.length ? ` + ${struckTexts.length} strikethrough` : ""}${coloredTexts.length ? ` + ${coloredTexts.length} added` : ""}…`;
     setStep(scanLabel);
 
     // 2. Build context — filter template to matching doc type
@@ -797,6 +799,12 @@ async function startReview() {
     });
     const tplCtx = matchingTemplates
       .map(c=>`[TEMPLATE ${reviewDocType}] ${c.name}:\n${(c.text||"").slice(0,30000)}`).join("\n\n");
+
+    const commentsCtx = docComments.length
+      ? docComments.map((c, i) =>
+          `[COMMENT ${i+1}]${c.resolved ? " (resolved)" : ""} By: ${c.author} | On: "${c.anchoredText.slice(0,150)}" | Note: "${c.content.slice(0,300)}"`
+        ).join("\n")
+      : "None";
 
     const struckCtx = struckTexts.length
       ? struckTexts.map((t, i) => `[STRIKETHROUGH ${i+1}] "${t.slice(0,400)}"`).join("\n")
@@ -828,9 +836,10 @@ You have no opinion. You do not know what is "better" or "more standard" in the 
 RULE 4 — COMPLETED DEALS ARE NOT RECOMMENDATIONS.
 The completed deals above show past exceptions we accepted under negotiation pressure. They are NOT our position. Do not use them to flag anything. Only reference them in "suggestedLanguage" if the counterparty has already deviated from the template and you need to show what we have accepted before as a fallback.
 
-RULE 5 — STRIKETHROUGH AND ADDED TEXT ARE ALWAYS SURFACED.
+RULE 5 — STRIKETHROUGH, ADDED TEXT, AND COMMENTS ARE ALWAYS SURFACED.
 Each strikethrough section → its own entry, category "Strikethrough", "found" = exact struck text.
 Each colored/added text section → its own entry, category "Added Language", "found" = exact colored text.
+Each document comment → its own entry, category "Comment", "found" = the full comment note text written by the reviewer (NOT the highlighted anchor text — use the "Note:" field from the comment, never the "On:" field).
 
 RULE 6 — RECOMMENDATION MUST BE MEANINGFUL.
 For every finding, set "recommendation" to one of these based on your actual assessment:
@@ -849,7 +858,7 @@ Never include specific company names, counterparty trade names, or customer name
 Return JSON only:
 {"overallRisk":"low|medium|high","summary":"2-3 sentences","clauses":[{"category":"","sectionRef":"","found":"EXACT verbatim","deviationFromTemplate":"","recommendation":"accept|negotiate|reject|flag","reasoning":"","suggestedLanguage":""}],"criticalIssues":[],"autoApprovable":true}`;
 
-    const userMsg = `Review this ${reviewDocType}:\n\n${docText.slice(0, 35000)}\n\nSTRIKETHROUGH SECTIONS DETECTED IN DOCUMENT:\n${struckCtx}\n\nCOLORED/ADDED TEXT DETECTED IN DOCUMENT (non-black font color — likely inserted by counterparty):\n${coloredCtx}`;
+    const userMsg = `Review this ${reviewDocType}:\n\n${docText.slice(0, 35000)}\n\nEXISTING DOCUMENT COMMENTS:\n${commentsCtx}\n\nSTRIKETHROUGH SECTIONS DETECTED IN DOCUMENT:\n${struckCtx}\n\nCOLORED/ADDED TEXT DETECTED IN DOCUMENT (non-black font color — likely inserted by counterparty):\n${coloredCtx}`;
     const raw = await callClaude(sys, userMsg, 10000);
     const result = repairJSON(raw);
 
@@ -1034,7 +1043,24 @@ function insertIntoDoc(text) {
 
 // ── Render results ────────────────────────────────────────────────────────────
 function renderResults(result) {
-  reviewClauses = (result.clauses||[]).map(c => ({...c, userDecision: null, userNotes: ""}));
+  reviewClauses = (result.clauses||[]).map(c => {
+    const clause = {...c, userDecision: null, userNotes: ""};
+    if (lastDocComments.length && c.category === "Comment") {
+      const normFound = normalizeForSearch(c.found || "").slice(0, 80);
+      const match = lastDocComments.find(dc => {
+        const normContent = normalizeForSearch(dc.content || "").slice(0, 80);
+        return normFound && normContent && (
+          normFound.includes(normContent.slice(0, 50)) || normContent.includes(normFound.slice(0, 50))
+        );
+      }) || lastDocComments[0];
+      if (match) {
+        clause._isComment      = true;
+        clause._commentContent = match.content;
+        clause._commentAnchor  = match.anchoredText;
+      }
+    }
+    return clause;
+  });
 
   // Sort clauses by their position in the document (top to bottom).
   // Strip all non-alphanumeric chars before comparing so punctuation
@@ -1042,7 +1068,7 @@ function renderResults(result) {
   const alphaOnly = s => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
   const docAlpha = alphaOnly(docText);
   function docPos(c) {
-    const candidates = [c.found].filter(Boolean);
+    const candidates = [c._isComment ? c._commentAnchor : c.found].filter(Boolean);
     for (const txt of candidates) {
       const snippet = alphaOnly(txt).slice(0, 80);
       if (!snippet) continue;
@@ -1081,7 +1107,10 @@ function renderClauses() {
     <div class="clause-card ${dec}" id="clause-${i}">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:6px;">
         <div style="display:flex;gap:5px;flex-wrap:wrap;">
-          <span class="badge" style="background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.4)">${escHtml(safeStr(c.category))}</span>
+          ${c._isComment
+            ? `<span class="badge" style="background:rgba(255,255,255,0.08);color:#ffffff;border:1px solid rgba(255,255,255,0.25)">💬 Comment</span>`
+            : `<span class="badge" style="background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.4)">${escHtml(safeStr(c.category))}</span>`
+          }
           ${c.sectionRef?`<span class="badge" style="background:rgba(59,130,246,0.07);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);cursor:pointer;" onclick="navigateToSection('${escHtml(safeStr(c.sectionRef))}')" title="Click to jump to this section">§ ${escHtml(safeStr(c.sectionRef))}</span>`:""}
           <span class="badge" style="${{
             accept:    'background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)',
@@ -1098,6 +1127,12 @@ function renderClauses() {
               : `Source: Deviation from ${reviewDocType} template${c.deviationFromTemplate ? " — " + escHtml(safeStr(c.deviationFromTemplate).slice(0,120)) : ""}`
         }</span></span>
       </div>
+      ${c._isComment && c._commentContent ? `
+      <div class="found-box" onclick="navigateToClause(${i})" title="Click to jump to comment location in document">
+        <div style="font-size:10px;color:#555555;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Comment Note</div>
+        <span style="font-size:11px;color:#cccccc;">${escHtml(safeStr(c._commentContent))}</span>
+      </div>
+      ` : ""}
       ${(c.category === "Strikethrough" || c.category === "Added Language") && c.found ? `
       <div class="found-box" onclick="navigateToClause(${i})" title="Click to jump to this section in the document">
         <div style="font-size:10px;color:#555555;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Found in document</div>
@@ -1636,7 +1671,8 @@ async function findClauseRange(context, foundText) {
 let _navGen = 0;
 function navigateToClause(idx) {
   const gen = ++_navGen;
-  const foundText = (reviewClauses[idx] && reviewClauses[idx].found) || "";
+  const clause = reviewClauses[idx];
+  const foundText = (clause && (clause._isComment ? clause._commentAnchor : clause.found)) || "";
   if (!foundText) return;
 
   // Highlight active card immediately
