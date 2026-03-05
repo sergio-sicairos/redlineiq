@@ -1064,13 +1064,17 @@ function renderResults(result) {
     return clause;
   });
 
-  // Sort clauses by their position in the document (top to bottom)
-  const docNorm = normalizeForSearch(docText).toLowerCase();
+  // Sort clauses by their position in the document (top to bottom).
+  // Strip all non-alphanumeric chars before comparing so punctuation
+  // differences between Claude's output and raw doc text don't break ordering.
+  const alphaOnly = s => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const docAlpha = alphaOnly(docText);
   function docPos(c) {
-    // Try found text, then comment anchor — use whichever gives a real position
     const candidates = [c.found, c._commentAnchor].filter(Boolean);
     for (const txt of candidates) {
-      const pos = docNorm.indexOf(normalizeForSearch(txt).toLowerCase().slice(0, 80));
+      const snippet = alphaOnly(txt).slice(0, 80);
+      if (!snippet) continue;
+      const pos = docAlpha.indexOf(snippet);
       if (pos !== -1) return pos;
     }
     return Infinity;
@@ -1620,10 +1624,11 @@ function normalizeForSearch(text) {
     .trim();
 }
 
-// Strips characters Word's search engine treats specially
+// Only strip characters that genuinely break Word's search API (newlines/tabs).
+// Word with matchWildcards:false treats all other chars as literals.
 function cleanForWordSearch(text) {
   return text
-    .replace(/[(){}\[\]\\^$|*+?.]/g, ' ') // Word search special chars → space
+    .replace(/[\r\n\t]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
