@@ -523,7 +523,7 @@
 <script>
 // ── Config ──────────────────────────────────────────────────────────────────
 const FOLDER = "RedlineIQ";
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-haiku-4-5-20251001";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 
 let playbook = { clauses: [], contracts: [], outcomes: [] };
@@ -818,7 +818,7 @@ async function startReview() {
           || equivTypes.some(t => cName.includes(t));
     });
     const tplCtx = matchingTemplates
-      .map(c=>`[TEMPLATE ${reviewDocType}] ${c.name}:\n${(c.text||"").slice(0,15000)}`).join("\n\n");
+      .map(c=>`[TEMPLATE ${reviewDocType}] ${c.name}:\n${(c.text||"").slice(0,8000)}`).join("\n\n");
 
     const commentsCtx = docComments.length
       ? docComments.map((c, i) =>
@@ -885,9 +885,9 @@ Never include specific company names, counterparty trade names, or customer name
 Return JSON only:
 {"overallRisk":"low|medium|high","summary":"2-3 sentences","clauses":[{"category":"","sectionRef":"","found":"EXACT verbatim","deviationFromTemplate":"","recommendation":"accept|negotiate|reject|flag","reasoning":"","suggestedLanguage":""}],"criticalIssues":[],"autoApprovable":true}`;
 
-    const userMsg = `Review this ${reviewDocType}:\n\n${docText.slice(0, 20000)}\n\nEXISTING DOCUMENT COMMENTS:\n${commentsCtx}\n\nSTRIKETHROUGH SECTIONS DETECTED IN DOCUMENT:\n${struckCtx}\n\nCOLORED/ADDED TEXT DETECTED IN DOCUMENT (non-black font color — likely inserted by counterparty):\n${coloredCtx}`;
+    const userMsg = `Review this ${reviewDocType}:\n\n${docText.slice(0, 10000)}\n\nEXISTING DOCUMENT COMMENTS:\n${commentsCtx}\n\nSTRIKETHROUGH SECTIONS DETECTED IN DOCUMENT:\n${struckCtx}\n\nCOLORED/ADDED TEXT DETECTED IN DOCUMENT (non-black font color — likely inserted by counterparty):\n${coloredCtx}`;
     setStep("Sending to AI…");
-    const raw = await callClaude(sys, userMsg, 6000);
+    const raw = await callClaude(sys, userMsg, 4000);
     const result = repairJSON(raw);
 
     setStep("Done.");
