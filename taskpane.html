@@ -889,8 +889,15 @@ Return JSON only:
 {"overallRisk":"low|medium|high","summary":"2-3 sentences","clauses":[{"category":"","sectionRef":"","found":"EXACT verbatim","deviationFromTemplate":"","recommendation":"accept|negotiate|reject|flag","reasoning":"","suggestedLanguage":""}],"criticalIssues":[],"autoApprovable":true}`;
 
     const userMsg = `Review this ${reviewDocType}:\n\n${docText.slice(0, 10000)}\n\nEXISTING DOCUMENT COMMENTS:\n${commentsCtx}\n\nSTRIKETHROUGH SECTIONS DETECTED IN DOCUMENT:\n${struckCtx}\n\nCOLORED/ADDED TEXT DETECTED IN DOCUMENT (non-black font color — likely inserted by counterparty):\n${coloredCtx}`;
-    setStep("Sending to AI…");
-    const raw = await callClaude(sys, userMsg, 4000);
+    let _elapsed = 0;
+    const _ticker = setInterval(() => { _elapsed++; setStep(`Sending to AI… (${_elapsed}s)`); }, 1000);
+    let raw;
+    try {
+      raw = await withTimeout(callClaude(sys, userMsg, 4000), 50000, null);
+    } finally {
+      clearInterval(_ticker);
+    }
+    if (raw === null) throw new Error("API timed out after 50s — check your API key or network.");
     const result = repairJSON(raw);
 
     setStep("Done.");
