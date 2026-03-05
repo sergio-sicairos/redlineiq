@@ -1593,6 +1593,7 @@ async function loadResources() {
        <div class="stat-card"><div class="stat-num">${cats.completed}</div><div class="stat-label">Completed</div></div>
        <div class="stat-card"><div class="stat-num">${resources.length}</div><div class="stat-label">Total Docs</div></div>
        <div class="stat-card"><div class="stat-num">${Object.keys(types).length}</div><div class="stat-label">Doc Types</div></div>`;
+    const catLabels = { templates: "Template", completed: "Completed Deal" };
     document.getElementById("resources-list").innerHTML = resources.slice().reverse().map(r => `
       <div class="resource-row">
         <div>
