@@ -538,7 +538,10 @@ let reviewDocType = "MSA";
 async function storageGet(key) {
   try {
     if (typeof OfficeRuntime !== "undefined" && OfficeRuntime.storage) {
-      const val = await OfficeRuntime.storage.getItem(key);
+      const val = await Promise.race([
+        OfficeRuntime.storage.getItem(key),
+        new Promise(r => setTimeout(() => r(null), 3000))
+      ]);
       if (val) return val;
     }
   } catch(_) {}
