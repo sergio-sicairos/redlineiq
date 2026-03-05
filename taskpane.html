@@ -821,7 +821,7 @@ async function startReview() {
 ${reviewDocType} TEMPLATE (our standard):
 ${tplCtx||"No matching template loaded."}
 
-OUR POSITIONS (standard language, fallback floors, and hard limits — no specific company context):
+OUR POSITIONS — use these to calibrate every recommendation (standard language we push for, fallback floors we'll accept under pressure, hard limits we never accept):
 ${playbookCtx||"None"}
 
 RULES — read carefully and follow exactly:
@@ -843,13 +843,20 @@ Each strikethrough section → its own entry, category "Strikethrough", "found" 
 Each colored/added text section → its own entry, category "Added Language", "found" = exact colored text.
 Each document comment → its own entry, category "Comment", "found" = the full comment note text written by the reviewer (NOT the highlighted anchor text — use the "Note:" field from the comment, never the "On:" field).
 
-RULE 6 — RECOMMENDATION MUST BE MEANINGFUL.
-For every finding, set "recommendation" to one of these based on your actual assessment:
-- "accept" — the deviation is minor, harmless, or favorable to us
-- "negotiate" — problematic but we can counter; put our counter-position in "suggestedLanguage"
-- "reject" — unacceptable, must be removed or reverted to template language
-- "flag" — genuinely unclear; needs human judgment
-Do NOT set every finding to "flag". Use all four options based on the severity and nature of the deviation.
+RULE 6 — RECOMMENDATION REQUIRES BOTH TEMPLATE AND POSITIONS.
+Every recommendation must be calibrated using the template deviation AND our positions for that clause category. Follow this decision logic in order:
+
+Step 1 — Identify the clause category (e.g. Limitation of Liability, Indemnification, Payment Terms).
+Step 2 — Look up our position for that category in OUR POSITIONS above.
+Step 3 — Apply:
+  - Deviation triggers our Hard Limit → "reject" (non-negotiable, must revert)
+  - Deviation is outside our Standard Language but our Fallback would cover it → "negotiate"; set suggestedLanguage to our Standard Language as the counter-offer
+  - Deviation is worse than our Fallback (and no Hard Limit defined) → "reject"
+  - Deviation is within our Standard Language or more favorable to us → "accept"
+  - No position exists for this category → use severity of template deviation: minor/favorable = "accept", material/problematic = "negotiate", egregious/one-sided = "reject"
+  - Genuinely ambiguous even after checking positions → "flag"
+
+Always populate suggestedLanguage with our Standard Language (or Fallback if standard is unachievable) for any "negotiate" or "reject" finding where a position exists.
 
 RULE 7 — EXACT FIELDS.
 "sectionRef" = full section number as it appears (e.g. "8.2.1"). "found" = exact verbatim text from the submitted document, never paraphrased.
