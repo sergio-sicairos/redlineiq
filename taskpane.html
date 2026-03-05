@@ -846,7 +846,8 @@ The completed deals above show past exceptions we accepted under negotiation pre
 
 RULE 5 — STRIKETHROUGH, ADDED TEXT, AND COMMENTS ARE ALWAYS SURFACED.
 Each strikethrough section → its own entry, category "Strikethrough", "found" = exact struck text.
-Each colored/added text section → its own entry, category "Added Language", "found" = exact colored text.
+Each colored/added text or tracked-change insertion listed below → its own entry, category "Added Language", "found" = exact text as listed.
+Additionally: if the submitted document contains any entire clause, section, sentence, or significant block of text that has NO equivalent anywhere in the template (i.e. it is purely new language not present in the template at all), create a finding with category "Added Language", "found" = that new text verbatim, recommendation "flag".
 Each document comment → its own entry, category "Comment", "found" = the full comment note text written by the reviewer (NOT the highlighted anchor text — use the "Note:" field from the comment, never the "On:" field).
 
 RULE 6 — RECOMMENDATION REQUIRES BOTH TEMPLATE AND POSITIONS.
@@ -943,13 +944,17 @@ function getColoredTexts() {
         paras.load("items");
         await context.sync();
 
-        paras.items.forEach(p => { p.load("text"); p.font.load("color"); });
+        paras.items.forEach(p => { p.load("text"); p.font.load("color,underline"); });
         await context.sync();
 
-        const isAdded = color => {
-          if (!color) return false;
-          const c = color.replace("#","").toLowerCase();
-          return c !== "" && c !== "auto" && c !== "000000" && c !== "ffffff";
+        // Flag non-black/non-auto color OR underlined text (underline = tracked insertion display)
+        const isAdded = (color, underline) => {
+          const hasColor = color && (() => {
+            const c = color.replace("#","").toLowerCase();
+            return c !== "" && c !== "auto" && c !== "000000" && c !== "ffffff";
+          })();
+          const hasUnderline = underline && underline !== "None" && underline !== "none";
+          return hasColor || hasUnderline;
         };
 
         const results = [];
@@ -957,14 +962,14 @@ function getColoredTexts() {
 
         for (const p of paras.items) {
           if (!p.text.trim() || p.text.trim().length < 3) continue;
-          if (isAdded(p.font.color)) {
-            results.push({ text: p.text.trim(), color: p.font.color });
+          if (isAdded(p.font.color, p.font.underline)) {
+            results.push({ text: p.text.trim(), color: p.font.color || "underline" });
           } else {
             needsDeepScan.push(p);
           }
         }
 
-        // Batch word-level scan for paragraphs that may have partial coloring
+        // Batch word-level scan for paragraphs that may have partial coloring/underline
         if (needsDeepScan.length) {
           const splitRanges = needsDeepScan.map(p => {
             const r = p.getTextRanges([" ", "\t"], true);
@@ -974,26 +979,28 @@ function getColoredTexts() {
           await context.sync();
 
           splitRanges.forEach(r => r.items.forEach(item => {
-            item.load("text"); item.font.load("color");
+            item.load("text"); item.font.load("color,underline");
           }));
           await context.sync();
 
           for (const ranges of splitRanges) {
-            let group = [], groupColor = null;
+            let group = [], groupKey = null;
             for (const r of ranges.items) {
-              if (isAdded(r.font.color) && r.text.trim()) {
-                const c = r.font.color.replace("#","").toLowerCase();
-                if (!groupColor || c === groupColor) { group.push(r.text); groupColor = c; }
-                else { if (group.length) results.push({ text: group.join("").trim(), color: groupColor }); group = [r.text]; groupColor = c; }
+              if (isAdded(r.font.color, r.font.underline) && r.text.trim()) {
+                const key = (r.font.color||"auto").replace("#","").toLowerCase();
+                if (!groupKey || key === groupKey) { group.push(r.text); groupKey = key; }
+                else { if (group.length) results.push({ text: group.join("").trim(), color: groupKey }); group = [r.text]; groupKey = key; }
               } else {
-                if (group.length) { results.push({ text: group.join("").trim(), color: groupColor }); group = []; groupColor = null; }
+                if (group.length) { results.push({ text: group.join("").trim(), color: groupKey }); group = []; groupKey = null; }
               }
             }
-            if (group.length) results.push({ text: group.join("").trim(), color: groupColor });
+            if (group.length) results.push({ text: group.join("").trim(), color: groupKey });
           }
         }
 
-        resolve(results.filter(r => r.text.length > 3));
+        const filtered = results.filter(r => r.text.length > 3);
+        console.log("Added language detected:", filtered.length, filtered.map(r => r.text.slice(0,40)));
+        resolve(filtered);
       } catch(e) {
         console.warn("Colored text detection:", e.message);
         resolve([]);
@@ -1010,10 +1017,12 @@ function getTrackedInsertions() {
         const changes = context.document.body.getTrackedChanges();
         changes.load("items/type,items/text");
         await context.sync();
+        console.log("Tracked changes total:", changes.items.length, changes.items.map(c => c.type + ": " + (c.text||"").slice(0,30)));
         const results = changes.items
           .filter(c => (c.type || "").toLowerCase().includes("insert"))
           .map(c => ({ text: (c.text || "").trim(), color: "tracked change" }))
           .filter(c => c.text.length > 3);
+        console.log("Tracked insertions found:", results.length);
         resolve(results);
       } catch(e) {
         console.warn("Tracked insertions:", e.message);
@@ -1028,17 +1037,28 @@ function getDocumentComments() {
   return new Promise((resolve) => {
     Word.run(async (context) => {
       try {
-        // Load items + their scalar properties in one pass
-        const coll = context.document.body.getComments();
+        // document.getComments() is the standard API (WordApi 1.4).
+        // body.getComments() is not universally available.
+        const coll = context.document.getComments();
         coll.load("items/content,items/authorName,items/resolved");
         await context.sync();
 
+        console.log("Comments found:", coll.items.length);
         if (!coll.items.length) { resolve([]); return; }
 
-        // Load anchored ranges one-by-one — batching getRange() with other
-        // loads can silently fail in some Word versions
         const out = [];
         for (const c of coll.items) {
+          // content can be empty in some builds — fall back to contentRange text
+          let commentText = c.content || "";
+          if (!commentText) {
+            try {
+              const cr = c.contentRange;
+              cr.load("text");
+              await context.sync();
+              commentText = cr.text || "";
+            } catch(e) { /* leave empty */ }
+          }
+
           let anchoredText = "";
           try {
             const r = c.getRange();
@@ -1048,12 +1068,14 @@ function getDocumentComments() {
           } catch(re) {
             console.warn("Comment getRange failed:", re.message);
           }
+
           out.push({
             author:       c.authorName || "Reviewer",
-            content:      c.content    || "",
+            content:      commentText,
             anchoredText,
             resolved:     c.resolved
           });
+          console.log("Comment:", { author: c.authorName, content: commentText.slice(0,80), anchoredText: anchoredText.slice(0,40) });
         }
         resolve(out);
       } catch(e) {
