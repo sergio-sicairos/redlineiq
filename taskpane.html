@@ -828,17 +828,24 @@ async function startReview() {
       `[${c.category}]: Standard: ${anonymizeForAI(c.standardLang||"").slice(0,150)}${c.fallbackLang ? ` | Fallback: ${anonymizeForAI(c.fallbackLang).slice(0,100)}` : ""}${c.hardLimit ? ` | Hard Limit: ${anonymizeForAI(c.hardLimit).slice(0,80)}` : ""}`
     ).join("\n");
 
-    // 4. Review every item in parallel — small focused call per item
+    // 4. Review items in batches of 3 to avoid rate limits
     let completed = 0;
     setStep(`Reviewing 0 of ${items.length}…`);
-    const clauses = await Promise.all(items.map(async item => {
-      const clause = await withTimeout(reviewSingleItem(item, posCtx, reviewDocType), 30000, null);
-      completed++;
-      setStep(`Reviewing ${completed} of ${items.length}…`);
-      if (!clause) return { category: item.type, found: item.text.slice(0,300), recommendation: "flag", reasoning: "Timed out", sectionRef: "", suggestedLanguage: "", deviationFromTemplate: "" };
-      if (!clause.found) clause.found = item.text.slice(0, 300);
-      return clause;
-    }));
+    const clauses = [];
+    const BATCH = 3;
+    for (let i = 0; i < items.length; i += BATCH) {
+      const batch = items.slice(i, i + BATCH);
+      const results = await Promise.all(batch.map(async item => {
+        const clause = await withTimeout(reviewSingleItem(item, posCtx, reviewDocType), 30000, null);
+        completed++;
+        setStep(`Reviewing ${completed} of ${items.length}…`);
+        if (!clause) return { category: item.type, found: item.text.slice(0,300), recommendation: "flag", reasoning: "Timed out", sectionRef: "", suggestedLanguage: "", deviationFromTemplate: "" };
+        if (!clause.found) clause.found = item.text.slice(0, 300);
+        return clause;
+      }));
+      clauses.push(...results);
+      if (i + BATCH < items.length) await new Promise(r => setTimeout(r, 1000)); // pause between batches
+    }
 
     // 5. Aggregate results
     const recs = clauses.map(c => c.recommendation);
@@ -891,12 +898,22 @@ ${item.anchor ? `Near contract text: "${item.anchor.slice(0, 200)}"` : ""}
 ${item.author ? `By: ${item.author}` : ""}
 Text to review: "${item.text.slice(0, 600)}"`;
 
-  const raw = await callClaude(sys, user, 500);
-  try {
-    return repairJSON(raw);
-  } catch(e) {
-    return { category: item.type, found: item.text.slice(0,300), recommendation: "flag", reasoning: "Could not parse response", sectionRef: "", suggestedLanguage: "", deviationFromTemplate: "" };
+  const fallback = { category: item.type, found: item.text.slice(0,300), recommendation: "flag", reasoning: "", sectionRef: "", suggestedLanguage: "", deviationFromTemplate: "" };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const raw = await callClaude(sys, user, 500);
+      const parsed = repairJSON(raw);
+      return parsed;
+    } catch(e) {
+      if (e.message.includes("Rate limited") && attempt === 0) {
+        await new Promise(r => setTimeout(r, 4000)); // wait 4s then retry once
+        continue;
+      }
+      fallback.reasoning = e.message;
+      return fallback;
+    }
   }
+  return fallback;
 }
 
 function selectReviewType(el, type) {
