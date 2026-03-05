@@ -331,6 +331,7 @@
       <img class="spinner" src="gavel_red_transparent.gif" alt="" style="width:80px;height:80px;margin:0 auto 12px;display:block;">
       <div id="review-header" style="font-weight:600;margin-bottom:6px;color:#ffffff;">Analyzing Document</div>
       <div id="review-step" class="text-muted text-xs">Reading document text…</div>
+      <button onclick="cancelReview()" style="margin-top:14px;background:none;border:1px solid rgba(255,255,255,0.15);color:#555555;font-size:10px;padding:4px 12px;cursor:pointer;letter-spacing:0.05em;">Cancel</button>
     </div>
   </div>
 
@@ -1440,24 +1441,47 @@ async function driveWriteFile(token, folderId, filename, data) {
 }
 
 // ── Claude API calls ──────────────────────────────────────────────────────────
+let _reviewAbortController = null;
+
+function cancelReview() {
+  if (_reviewAbortController) { _reviewAbortController.abort(); _reviewAbortController = null; }
+  show("view-idle");
+}
+
 async function callClaude(system, user, maxTokens = 4096) {
   const key = await getApiKey();
   if (!key) throw new Error("No API key set. Click ⚙ to add your Anthropic key.");
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": key,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify({
-      model: MODEL, max_tokens: maxTokens,
-      system, messages: [{ role:"user", content: user }]
-    })
-  });
-  const d = await r.json();
-  return (d.content||[]).map(b=>b.text||"").join("\n");
+  _reviewAbortController = new AbortController();
+  const timeoutId = setTimeout(() => _reviewAbortController.abort(), 120000); // 2-minute timeout
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      signal: _reviewAbortController.signal,
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: MODEL, max_tokens: maxTokens,
+        system, messages: [{ role:"user", content: user }]
+      })
+    });
+    clearTimeout(timeoutId);
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(`API error ${r.status}: ${err.error?.message || r.statusText}`);
+    }
+    const d = await r.json();
+    return (d.content||[]).map(b=>b.text||"").join("\n");
+  } catch(e) {
+    clearTimeout(timeoutId);
+    if (e.name === "AbortError") throw new Error("Review timed out or was cancelled.");
+    throw e;
+  } finally {
+    _reviewAbortController = null;
+  }
 }
 
 
