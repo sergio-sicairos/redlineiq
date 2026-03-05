@@ -771,17 +771,19 @@ async function startReview() {
   try {
     // 1. Extract document text, comments, and strikethrough in parallel
     setStep("Reading document…");
-    const [rawText, docComments, struckTexts, coloredTexts] = await Promise.all([
+    const [rawText, docComments, struckTexts, coloredTexts, trackedInserts] = await Promise.all([
       getDocumentText(),
       getDocumentComments(),
       getStrikethroughTexts(),
-      getColoredTexts()
+      getColoredTexts(),
+      getTrackedInsertions()
     ]);
     docText = rawText;
     lastDocComments = docComments;
+    const allAdded = [...coloredTexts, ...trackedInserts];
     if (!docText.trim()) { alert("Document appears to be empty."); show("view-idle"); return; }
 
-    const scanLabel = `Analyzing ${reviewDocType}${docComments.length ? ` + ${docComments.length} comment${docComments.length>1?"s":""}` : ""}${struckTexts.length ? ` + ${struckTexts.length} strikethrough` : ""}${coloredTexts.length ? ` + ${coloredTexts.length} added` : ""}…`;
+    const scanLabel = `Analyzing ${reviewDocType}${docComments.length ? ` + ${docComments.length} comment${docComments.length>1?"s":""}` : ""}${struckTexts.length ? ` + ${struckTexts.length} strikethrough` : ""}${allAdded.length ? ` + ${allAdded.length} added` : ""}…`;
     setStep(scanLabel);
 
     // 2. Build context — filter template to matching doc type
@@ -810,8 +812,8 @@ async function startReview() {
       ? struckTexts.map((t, i) => `[STRIKETHROUGH ${i+1}] "${t.slice(0,400)}"`).join("\n")
       : "None";
 
-    const coloredCtx = coloredTexts.length
-      ? coloredTexts.map((t, i) => `[ADDED TEXT ${i+1}] (${t.color}) "${t.text.slice(0,400)}"`).join("\n")
+    const coloredCtx = allAdded.length
+      ? allAdded.map((t, i) => `[ADDED TEXT ${i+1}] (${t.color}) "${t.text.slice(0,400)}"`).join("\n")
       : "None";
 
     const sys = `You are a contract comparison tool. Document type: ${reviewDocType}.
@@ -981,6 +983,27 @@ function getColoredTexts() {
         resolve(results.filter(r => r.text.length > 3));
       } catch(e) {
         console.warn("Colored text detection:", e.message);
+        resolve([]);
+      }
+    }).catch(() => resolve([]));
+  });
+}
+
+// ── Extract tracked-change insertions (Word "Accept/Reject Changes" additions) ─
+function getTrackedInsertions() {
+  return new Promise(resolve => {
+    Word.run(async context => {
+      try {
+        const changes = context.document.body.getTrackedChanges();
+        changes.load("items/type,items/text");
+        await context.sync();
+        const results = changes.items
+          .filter(c => (c.type || "").toLowerCase().includes("insert"))
+          .map(c => ({ text: (c.text || "").trim(), color: "tracked change" }))
+          .filter(c => c.text.length > 3);
+        resolve(results);
+      } catch(e) {
+        console.warn("Tracked insertions:", e.message);
         resolve([]);
       }
     }).catch(() => resolve([]));
