@@ -331,7 +331,6 @@
       <img class="spinner" src="gavel_red_transparent.gif" alt="" style="width:80px;height:80px;margin:0 auto 12px;display:block;">
       <div id="review-header" style="font-weight:600;margin-bottom:6px;color:#ffffff;">Analyzing Document</div>
       <div id="review-step" class="text-muted text-xs">Reading document text…</div>
-      <button onclick="cancelReview()" style="margin-top:14px;background:none;border:1px solid rgba(255,255,255,0.15);color:#555555;font-size:10px;padding:4px 12px;cursor:pointer;letter-spacing:0.05em;">Cancel</button>
     </div>
   </div>
 
@@ -783,19 +782,15 @@ async function startReview() {
   if (rh) rh.textContent = capVibe(_vibe) + " the contract…";
   setStep(capVibe(_vibe) + " the document…");
 
-  // Resolves to fallback value if promise takes longer than ms
-  const withTimeout = (p, ms, fallback) => Promise.race([p, new Promise(r => setTimeout(() => r(fallback), ms))]);
-
   try {
     // 1. Extract document text, comments, and strikethrough in parallel
-    // Each scanner has an individual timeout so a hung API call can't freeze the whole review
     setStep(capVibe(_vibe) + " the document…");
     const [rawText, docComments, struckTexts, coloredTexts, trackedInserts] = await Promise.all([
       getDocumentText(),
-      withTimeout(getDocumentComments(),   8000, []),
-      withTimeout(getStrikethroughTexts(), 8000, []),
-      withTimeout(getColoredTexts(),       8000, []),
-      withTimeout(getTrackedInsertions(),  5000, []),
+      getDocumentComments(),
+      getStrikethroughTexts(),
+      getColoredTexts(),
+      getTrackedInsertions()
     ]);
     docText = rawText;
     lastDocComments = docComments;
@@ -878,7 +873,7 @@ Step 3 — Apply:
 Always populate suggestedLanguage with our Standard Language (or Fallback if standard is unachievable) for any "negotiate" or "reject" finding where a position exists.
 
 RULE 7 — EXACT FIELDS.
-"sectionRef" = section number AND title as they appear together (e.g. "4.3 Taxes" or "8.2.1 Limitation of Liability"). If no number exists, use the heading text. "found" = exact verbatim text from the submitted document, never paraphrased.
+"sectionRef" = full section number as it appears (e.g. "8.2.1"). "found" = exact verbatim text from the submitted document, never paraphrased.
 
 RULE 8 — NO COMPANY NAMES IN OUTPUT.
 Never include specific company names, counterparty trade names, or customer names in any output field. Use generic terms only: "the counterparty", "the customer", "the vendor", "the parties". This prevents data from one deal from appearing in another.
@@ -978,10 +973,8 @@ function getColoredTexts() {
         }
 
         // Batch word-level scan for paragraphs that may have partial coloring
-        // Cap at 60 paragraphs — large docs make this extremely slow
-        const deepScanBatch = needsDeepScan.slice(0, 60);
-        if (deepScanBatch.length) {
-          const splitRanges = deepScanBatch.map(p => {
+        if (needsDeepScan.length) {
+          const splitRanges = needsDeepScan.map(p => {
             const r = p.getTextRanges([" ", "\t"], true);
             r.load("items");
             return r;
@@ -993,7 +986,7 @@ function getColoredTexts() {
           }));
           await context.sync();
 
-          for (const ranges of splitRanges.filter(r => r.items)) {
+          for (const ranges of splitRanges) {
             let group = [], groupColor = null;
             for (const r of ranges.items) {
               if (isAdded(r.font.color) && r.text.trim()) {
@@ -1044,7 +1037,7 @@ function getDocumentComments() {
     Word.run(async (context) => {
       try {
         // Load items + their scalar properties in one pass
-        const coll = context.document.getComments();
+        const coll = context.document.body.getComments();
         coll.load("items/content,items/authorName,items/resolved");
         await context.sync();
 
@@ -1154,55 +1147,19 @@ function renderClauses() {
   const container = document.getElementById("clauses-list");
   container.innerHTML = reviewClauses.map((c,i) => {
     const dec = c.userDecision || c.recommendation;
-    const matchPos = (playbook.clauses||[]).find(p => p.category && c.category &&
-      p.category.toLowerCase().trim() === c.category.toLowerCase().trim());
-    const rec = c.recommendation;
-    const recLabel = {accept:"Accept",negotiate:"Counter",reject:"Reject",flag:"Flag"}[rec] || safeStr(rec);
-
-    let reasonText;
-    if (c._isComment) {
-      reasonText = recLabel + " — comment surfaced from document";
-    } else if (c.category === "Strikethrough") {
-      reasonText = recLabel + " — removed/struck language detected in document";
-    } else if (c.category === "Added Language") {
-      reasonText = recLabel + " — added/inserted text detected in document";
-    } else if (matchPos) {
-      const posReasons = {
-        accept:    recLabel + " — within standard position for " + safeStr(matchPos.category),
-        negotiate: recLabel + " — outside standard; fallback language applies for " + safeStr(matchPos.category),
-        reject:    recLabel + " — exceeds hard limit for " + safeStr(matchPos.category),
-        flag:      recLabel + " — ambiguous deviation from " + safeStr(matchPos.category) + " position",
-      };
-      reasonText = posReasons[rec] || recLabel + " — based on " + safeStr(matchPos.category) + " position";
-    } else {
-      const tmplReasons = {
-        accept:    recLabel + " — follows template language",
-        negotiate: recLabel + " — deviates from template; standard language available",
-        reject:    recLabel + " — significant deviation from template",
-        flag:      recLabel + " — unclear deviation; manual review needed",
-      };
-      reasonText = tmplReasons[rec] || recLabel + " — based on template review";
-    }
-
-    // Top-left type badge: always Comment, Added Language, Removed Language, or clause category
-    const typeBadge = c._isComment
-      ? `<span class="badge" style="background:rgba(255,255,255,0.08);color:#ffffff;border:1px solid rgba(255,255,255,0.25)">💬 Comment</span>`
-      : c.category === "Added Language"
-        ? `<span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)">+ Added Language</span>`
-        : c.category === "Strikethrough"
-          ? `<span class="badge" style="background:rgba(224,32,32,0.1);color:#e02020;border:1px solid rgba(224,32,32,0.4)">— Removed Language</span>`
-          : `<span class="badge" style="background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.4)">${escHtml(safeStr(c.category))}</span>`;
-
-    // Found text — comments use note content, all others use found field
-    const foundRaw = c._isComment ? safeStr(c._commentContent || c.found || "") : safeStr(c.found || "");
-    const foundShort = foundRaw.length > 120 ? foundRaw.slice(0, 120) + "…" : foundRaw;
-
+    const matchPos = c.suggestedLanguage
+      ? (playbook.clauses||[]).find(p => p.category && c.category &&
+          p.category.toLowerCase().trim() === c.category.toLowerCase().trim())
+      : null;
     return `
     <div class="clause-card ${dec}" id="clause-${i}">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:6px;">
         <div style="display:flex;gap:5px;flex-wrap:wrap;">
-          ${typeBadge}
-          ${c.sectionRef ? `<span class="badge" style="background:rgba(59,130,246,0.07);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);cursor:pointer;" onclick="navigateToSection('${escHtml(safeStr(c.sectionRef))}')" title="Click to jump to this section">§ ${escHtml(safeStr(c.sectionRef))}</span>` : ""}
+          ${c._isComment
+            ? `<span class="badge" style="background:rgba(255,255,255,0.08);color:#ffffff;border:1px solid rgba(255,255,255,0.25)">💬 Comment</span>`
+            : `<span class="badge" style="background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.4)">${escHtml(safeStr(c.category))}</span>`
+          }
+          ${c.sectionRef?`<span class="badge" style="background:rgba(59,130,246,0.07);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);cursor:pointer;" onclick="navigateToSection('${escHtml(safeStr(c.sectionRef))}')" title="Click to jump to this section">§ ${escHtml(safeStr(c.sectionRef))}</span>`:""}
           <span class="badge" style="${{
             accept:    'background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)',
             negotiate: 'background:rgba(234,179,8,0.1);color:#eab308;border:1px solid rgba(234,179,8,0.4)',
@@ -1210,18 +1167,30 @@ function renderClauses() {
             flag:      'background:rgba(249,115,22,0.1);color:#f97316;border:1px solid rgba(249,115,22,0.4)',
           }[c.recommendation] || 'background:rgba(255,255,255,0.03);color:#888888;border:1px solid rgba(255,255,255,0.15)'}">AI: ${{negotiate:'Counter'}[c.recommendation]||safeStr(c.recommendation)}</span>
         </div>
-        <span class="info-icon">i<span class="info-tip">${escHtml(reasonText)}</span></span>
+        <span class="info-icon">i<span class="info-tip">${
+          c.category === "Strikethrough"
+            ? "Source: Strikethrough text detected in document"
+            : c.category === "Added Language"
+              ? "Source: Colored/added text detected in document"
+              : `Source: Deviation from ${reviewDocType} template${c.deviationFromTemplate ? " — " + escHtml(safeStr(c.deviationFromTemplate).slice(0,120)) : ""}`
+        }</span></span>
       </div>
-      ${foundRaw ? `
-      <div class="found-box" onclick="navigateToClause(${i})" title="Click to jump to this location in the document">
-        <div style="font-size:10px;color:#555555;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Found</div>
-        <span id="found-text-${i}" style="font-size:11px;color:#cccccc;">${escHtml(foundShort)}</span>
+      ${c._isComment && c._commentContent ? `
+      <div class="found-box" onclick="navigateToClause(${i})" title="Click to jump to comment location in document">
+        <div style="font-size:10px;color:#555555;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Comment Note</div>
+        <span style="font-size:11px;color:#cccccc;">${escHtml(safeStr(c._commentContent))}</span>
       </div>
-      ${foundRaw.length > 120 ? `<span style="color:#e02020;font-size:10px;cursor:pointer;display:block;margin-bottom:4px;" onclick="toggleFoundText(${i})" id="expand-btn-${i}">expand</span>` : ""}
       ` : ""}
-      ${c.deviationFromTemplate ? `<div style="font-size:11px;color:#d97706;margin-bottom:4px;">⚠ ${safeStr(c.deviationFromTemplate).slice(0,100)}</div>` : ""}
+      ${(c.category === "Strikethrough" || c.category === "Added Language") && c.found ? `
+      <div class="found-box" onclick="navigateToClause(${i})" title="Click to jump to this section in the document">
+        <div style="font-size:10px;color:#555555;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Found in document</div>
+        <span id="found-text-${i}" style="font-size:11px;color:#cccccc;">${escHtml(safeStr(c.found).length > 120 ? safeStr(c.found).slice(0,120) + "…" : safeStr(c.found))}</span>
+      </div>
+      ${safeStr(c.found).length > 120 ? `<span style="color:#e02020;font-size:10px;cursor:pointer;display:block;margin-bottom:4px;" onclick="toggleFoundText(${i})" id="expand-btn-${i}">expand</span>` : ""}
+      ` : ""}
+      ${c.deviationFromTemplate?`<div style="font-size:11px;color:#d97706;margin-bottom:4px;">⚠ ${safeStr(c.deviationFromTemplate).slice(0,100)}</div>`:""}
       <div style="font-size:11px;color:#cccccc;line-height:1.5;margin-bottom:6px;">${safeStr(c.reasoning).slice(0,150)}</div>
-      ${c.suggestedLanguage ? `
+      ${c.suggestedLanguage?`
         <div style="font-size:11px;color:#cccccc;background:rgba(255,255,255,0.03);padding:7px;margin-bottom:6px;line-height:1.4;border:1px solid rgba(255,255,255,0.15);border-left:2px solid rgba(224,32,32,0.7);position:relative;">
           <strong style="color:#ffffff">Suggested:</strong> ${escHtml(safeStr(c.suggestedLanguage).slice(0,160))}
           ${matchPos ? `<span class="info-icon" style="margin-left:6px;">i<span class="info-tip">${
@@ -1229,7 +1198,7 @@ function renderClauses() {
               (matchPos.standard ? " — Standard: " + safeStr(matchPos.standard).slice(0,120) : ""))
           }</span></span>` : ""}
         </div>
-      ` : ""}
+      `:""}
       <div class="decision-btns">
         ${["accept","negotiate","reject","flag"].map(d=>`
           <button class="decision-btn btn-${d} ${dec===d?`active-${d}`:""}"
@@ -1249,12 +1218,11 @@ function toggleFoundText(i) {
   const el = document.getElementById("found-text-" + i);
   const btn = document.getElementById("expand-btn-" + i);
   if (!el || !btn) return;
-  const fullText = c._isComment ? safeStr(c._commentContent || c.found || "") : safeStr(c.found || "");
   if (btn.textContent === "expand") {
-    el.textContent = fullText;
+    el.textContent = safeStr(c.found);
     btn.textContent = "collapse";
   } else {
-    el.textContent = fullText.slice(0, 120) + "…";
+    el.textContent = safeStr(c.found).slice(0, 120) + "…";
     btn.textContent = "expand";
   }
 }
@@ -1447,47 +1415,24 @@ async function driveWriteFile(token, folderId, filename, data) {
 }
 
 // ── Claude API calls ──────────────────────────────────────────────────────────
-let _reviewAbortController = null;
-
-function cancelReview() {
-  if (_reviewAbortController) { _reviewAbortController.abort(); _reviewAbortController = null; }
-  show("view-idle");
-}
-
 async function callClaude(system, user, maxTokens = 4096) {
   const key = await getApiKey();
   if (!key) throw new Error("No API key set. Click ⚙ to add your Anthropic key.");
-  _reviewAbortController = new AbortController();
-  const timeoutId = setTimeout(() => _reviewAbortController.abort(), 120000); // 2-minute timeout
-  try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      signal: _reviewAbortController.signal,
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: MODEL, max_tokens: maxTokens,
-        system, messages: [{ role:"user", content: user }]
-      })
-    });
-    clearTimeout(timeoutId);
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      throw new Error(`API error ${r.status}: ${err.error?.message || r.statusText}`);
-    }
-    const d = await r.json();
-    return (d.content||[]).map(b=>b.text||"").join("\n");
-  } catch(e) {
-    clearTimeout(timeoutId);
-    if (e.name === "AbortError") throw new Error("Review timed out or was cancelled.");
-    throw e;
-  } finally {
-    _reviewAbortController = null;
-  }
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: JSON.stringify({
+      model: MODEL, max_tokens: maxTokens,
+      system, messages: [{ role:"user", content: user }]
+    })
+  });
+  const d = await r.json();
+  return (d.content||[]).map(b=>b.text||"").join("\n");
 }
 
 
@@ -1796,11 +1741,8 @@ function navigateToClause(idx) {
 
 function navigateToSection(sectionRef) {
   if (!sectionRef) return;
-  // Extract just the leading number (e.g. "4.3 Taxes" → "4.3") for reliable search
-  const numMatch = sectionRef.match(/^[\d.]+/);
-  const searchTerm = numMatch ? numMatch[0] : sectionRef;
   Word.run(async (context) => {
-    const res = context.document.body.search(searchTerm, { matchCase: false, matchWholeWord: false });
+    const res = context.document.body.search(sectionRef, { matchCase: false, matchWholeWord: false });
     res.load("items");
     await context.sync();
     if (res.items.length > 0) { res.items[0].select(); await context.sync(); }
