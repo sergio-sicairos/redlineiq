@@ -1155,18 +1155,12 @@ function renderClauses() {
           flag:      'background:rgba(249,115,22,0.1);color:#f97316;border:1px solid rgba(249,115,22,0.4)',
         }[c.recommendation] || 'background:rgba(255,255,255,0.03);color:#888888;border:1px solid rgba(255,255,255,0.15)'}">${{accept:"Accept",negotiate:"Counter",reject:"Reject",flag:"Flag"}[c.recommendation]||safeStr(c.recommendation)}</span>
       </div>
-      ${c._isComment && c._commentContent ? `
-      <div class="found-box" onclick="navigateToClause(${i})" title="Click to jump to comment location in document">
-        <div style="font-size:10px;color:#555555;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Comment Note</div>
-        <span style="font-size:11px;color:#cccccc;">${escHtml(safeStr(c._commentContent))}</span>
+      ${(c._isComment ? (c._commentContent || c.found) : c.found) ? `
+      <div class="found-box" onclick="event.stopPropagation();navigateToClause(${i})" title="Click to jump to this location in the document">
+        <div style="font-size:10px;color:#555555;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Found</div>
+        <span id="found-text-${i}" style="font-size:11px;color:#cccccc;">${(()=>{ const txt = safeStr(c._isComment ? (c._commentContent || c.found) : c.found); return escHtml(txt.length > 120 ? txt.slice(0,120) + "…" : txt); })()}</span>
       </div>
-      ` : ""}
-      ${(c.category === "Strikethrough" || c.category === "Added Language") && c.found ? `
-      <div class="found-box" onclick="navigateToClause(${i})" title="Click to jump to this section in the document">
-        <div style="font-size:10px;color:#555555;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Found in document</div>
-        <span id="found-text-${i}" style="font-size:11px;color:#cccccc;">${escHtml(safeStr(c.found).length > 120 ? safeStr(c.found).slice(0,120) + "…" : safeStr(c.found))}</span>
-      </div>
-      ${safeStr(c.found).length > 120 ? `<span style="color:#e02020;font-size:10px;cursor:pointer;display:block;margin-bottom:4px;" onclick="toggleFoundText(${i})" id="expand-btn-${i}">expand</span>` : ""}
+      ${(safeStr(c._isComment ? (c._commentContent || c.found) : c.found).length > 120) ? `<span style="color:#e02020;font-size:10px;cursor:pointer;display:block;margin-bottom:4px;" onclick="event.stopPropagation();toggleFoundText(${i})" id="expand-btn-${i}">expand</span>` : ""}
       ` : ""}
       ${c.deviationFromTemplate?`<div style="font-size:11px;color:#d97706;margin-bottom:4px;">⚠ ${safeStr(c.deviationFromTemplate).slice(0,100)}</div>`:""}
       <div style="font-size:11px;color:#cccccc;line-height:1.5;margin-bottom:6px;">${safeStr(c.reasoning).slice(0,150)}</div>
@@ -1196,11 +1190,12 @@ function toggleFoundText(i) {
   const el = document.getElementById("found-text-" + i);
   const btn = document.getElementById("expand-btn-" + i);
   if (!el || !btn) return;
+  const fullText = safeStr(c._isComment ? (c._commentContent || c.found) : c.found);
   if (btn.textContent === "expand") {
-    el.textContent = safeStr(c.found);
+    el.textContent = fullText;
     btn.textContent = "collapse";
   } else {
-    el.textContent = safeStr(c.found).slice(0, 120) + "…";
+    el.textContent = fullText.slice(0, 120) + "…";
     btn.textContent = "expand";
   }
 }
