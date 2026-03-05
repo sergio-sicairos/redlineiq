@@ -771,18 +771,16 @@ async function startReview() {
   try {
     // 1. Extract document text, comments, and strikethrough in parallel
     setStep("Reading document…");
-    const [rawText, docComments, struckTexts, coloredTexts] = await Promise.all([
+    const [rawText, struckTexts, coloredTexts] = await Promise.all([
       getDocumentText(),
-      getDocumentComments(),
       getStrikethroughTexts(),
       getColoredTexts()
     ]);
     docText = rawText;
-    lastDocComments = docComments;
     if (!docText.trim()) { alert("Document appears to be empty."); show("view-idle"); return; }
 
-    const commentLabel = `Analyzing ${reviewDocType}${docComments.length ? ` + ${docComments.length} comment${docComments.length > 1?"s":""}` : ""}${struckTexts.length ? ` + ${struckTexts.length} strikethrough` : ""}${coloredTexts.length ? ` + ${coloredTexts.length} added` : ""}…`;
-    setStep(commentLabel);
+    const scanLabel = `Analyzing ${reviewDocType}${struckTexts.length ? ` + ${struckTexts.length} strikethrough` : ""}${coloredTexts.length ? ` + ${coloredTexts.length} added` : ""}…`;
+    setStep(scanLabel);
 
     // 2. Build context — filter template to matching doc type
     const playbookCtx = (playbook.clauses||[]).map(c =>
@@ -799,12 +797,6 @@ async function startReview() {
     });
     const tplCtx = matchingTemplates
       .map(c=>`[TEMPLATE ${reviewDocType}] ${c.name}:\n${(c.text||"").slice(0,30000)}`).join("\n\n");
-
-    const commentsCtx = docComments.length
-      ? docComments.map((c, i) =>
-          `[COMMENT ${i+1}]${c.resolved ? " (resolved)" : ""} By: ${c.author} | On: "${c.anchoredText.slice(0,150)}" | Note: "${c.content.slice(0,300)}"`
-        ).join("\n")
-      : "None";
 
     const struckCtx = struckTexts.length
       ? struckTexts.map((t, i) => `[STRIKETHROUGH ${i+1}] "${t.slice(0,400)}"`).join("\n")
@@ -836,10 +828,9 @@ You have no opinion. You do not know what is "better" or "more standard" in the 
 RULE 4 — COMPLETED DEALS ARE NOT RECOMMENDATIONS.
 The completed deals above show past exceptions we accepted under negotiation pressure. They are NOT our position. Do not use them to flag anything. Only reference them in "suggestedLanguage" if the counterparty has already deviated from the template and you need to show what we have accepted before as a fallback.
 
-RULE 5 — STRIKETHROUGH, ADDED TEXT, AND COMMENTS ARE ALWAYS SURFACED.
+RULE 5 — STRIKETHROUGH AND ADDED TEXT ARE ALWAYS SURFACED.
 Each strikethrough section → its own entry, category "Strikethrough", "found" = exact struck text.
 Each colored/added text section → its own entry, category "Added Language", "found" = exact colored text.
-Each document comment → its own entry, category "Comment", "found" = exact anchored text.
 
 RULE 6 — RECOMMENDATION MUST BE MEANINGFUL.
 For every finding, set "recommendation" to one of these based on your actual assessment:
@@ -858,7 +849,7 @@ Never include specific company names, counterparty trade names, or customer name
 Return JSON only:
 {"overallRisk":"low|medium|high","summary":"2-3 sentences","clauses":[{"category":"","sectionRef":"","found":"EXACT verbatim","deviationFromTemplate":"","recommendation":"accept|negotiate|reject|flag","reasoning":"","suggestedLanguage":""}],"criticalIssues":[],"autoApprovable":true}`;
 
-    const userMsg = `Review this ${reviewDocType}:\n\n${docText.slice(0, 35000)}\n\nEXISTING DOCUMENT COMMENTS:\n${commentsCtx}\n\nSTRIKETHROUGH SECTIONS DETECTED IN DOCUMENT:\n${struckCtx}\n\nCOLORED/ADDED TEXT DETECTED IN DOCUMENT (non-black font color — likely inserted by counterparty):\n${coloredCtx}`;
+    const userMsg = `Review this ${reviewDocType}:\n\n${docText.slice(0, 35000)}\n\nSTRIKETHROUGH SECTIONS DETECTED IN DOCUMENT:\n${struckCtx}\n\nCOLORED/ADDED TEXT DETECTED IN DOCUMENT (non-black font color — likely inserted by counterparty):\n${coloredCtx}`;
     const raw = await callClaude(sys, userMsg, 10000);
     const result = repairJSON(raw);
 
@@ -1043,26 +1034,7 @@ function insertIntoDoc(text) {
 
 // ── Render results ────────────────────────────────────────────────────────────
 function renderResults(result) {
-  reviewClauses = (result.clauses||[]).map(c => {
-    const clause = {...c, userDecision: null, userNotes: ""};
-    // Tag as a comment-origin clause by matching found text against extracted comments,
-    // regardless of what category Claude assigned. This makes the reply logic reliable.
-    if (lastDocComments.length) {
-      const normFound = normalizeForSearch(c.found || "").slice(0, 80);
-      const match = lastDocComments.find(dc => {
-        const normAnchor   = normalizeForSearch(dc.anchoredText || "").slice(0, 80);
-        const normContent  = normalizeForSearch(dc.content      || "").slice(0, 80);
-        return (normFound && normAnchor  && (normFound.includes(normAnchor.slice(0,40))  || normAnchor.includes(normFound.slice(0,40))))
-            || (normFound && normContent && (normFound.includes(normContent.slice(0,40)) || normContent.includes(normFound.slice(0,40))));
-      });
-      if (match) {
-        clause._isComment    = true;
-        clause._commentContent = match.content;
-        clause._commentAnchor  = match.anchoredText;
-      }
-    }
-    return clause;
-  });
+  reviewClauses = (result.clauses||[]).map(c => ({...c, userDecision: null, userNotes: ""}));
 
   // Sort clauses by their position in the document (top to bottom).
   // Strip all non-alphanumeric chars before comparing so punctuation
@@ -1070,7 +1042,7 @@ function renderResults(result) {
   const alphaOnly = s => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
   const docAlpha = alphaOnly(docText);
   function docPos(c) {
-    const candidates = [c.found, c._commentAnchor].filter(Boolean);
+    const candidates = [c.found].filter(Boolean);
     for (const txt of candidates) {
       const snippet = alphaOnly(txt).slice(0, 80);
       if (!snippet) continue;
@@ -1109,11 +1081,8 @@ function renderClauses() {
     <div class="clause-card ${dec}" id="clause-${i}">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:6px;">
         <div style="display:flex;gap:5px;flex-wrap:wrap;">
-          ${c._isComment
-            ? `<span class="badge" style="background:rgba(255,255,255,0.08);color:#ffffff;border:1px solid rgba(255,255,255,0.25)">💬 Comment</span>`
-            : `<span class="badge" style="background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.4)">${safeStr(c.category)}</span>`
-          }
-          ${c.sectionRef?`<span class="badge" style="background:rgba(59,130,246,0.07);color:#3b82f6;border:1px solid rgba(59,130,246,0.3)">§ ${safeStr(c.sectionRef)}</span>`:""}
+          <span class="badge" style="background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.4)">${escHtml(safeStr(c.category))}</span>
+          ${c.sectionRef?`<span class="badge" style="background:rgba(59,130,246,0.07);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);cursor:pointer;" onclick="navigateToSection('${escHtml(safeStr(c.sectionRef))}')" title="Click to jump to this section">§ ${escHtml(safeStr(c.sectionRef))}</span>`:""}
           <span class="badge" style="${{
             accept:    'background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)',
             negotiate: 'background:rgba(234,179,8,0.1);color:#eab308;border:1px solid rgba(234,179,8,0.4)',
@@ -1122,18 +1091,20 @@ function renderClauses() {
           }[c.recommendation] || 'background:rgba(255,255,255,0.03);color:#888888;border:1px solid rgba(255,255,255,0.15)'}">AI: ${{negotiate:'Counter'}[c.recommendation]||safeStr(c.recommendation)}</span>
         </div>
         <span class="info-icon">i<span class="info-tip">${
-          c._isComment
-            ? `Source: Document comment by ${safeStr(c._commentContent ? "reviewer" : "unknown")}`
-            : c.category === "Strikethrough"
-              ? "Source: Strikethrough text detected in document"
-              : `Source: Deviation from ${reviewDocType} template${c.deviationFromTemplate ? " — " + safeStr(c.deviationFromTemplate).slice(0,120) : ""}`
+          c.category === "Strikethrough"
+            ? "Source: Strikethrough text detected in document"
+            : c.category === "Added Language"
+              ? "Source: Colored/added text detected in document"
+              : `Source: Deviation from ${reviewDocType} template${c.deviationFromTemplate ? " — " + escHtml(safeStr(c.deviationFromTemplate).slice(0,120)) : ""}`
         }</span></span>
       </div>
+      ${(c.category === "Strikethrough" || c.category === "Added Language") && c.found ? `
       <div class="found-box" onclick="navigateToClause(${i})" title="Click to jump to this section in the document">
         <div style="font-size:10px;color:#555555;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Found in document</div>
         <span id="found-text-${i}" style="font-size:11px;color:#cccccc;">${escHtml(safeStr(c.found).length > 120 ? safeStr(c.found).slice(0,120) + "…" : safeStr(c.found))}</span>
       </div>
       ${safeStr(c.found).length > 120 ? `<span style="color:#e02020;font-size:10px;cursor:pointer;display:block;margin-bottom:4px;" onclick="toggleFoundText(${i})" id="expand-btn-${i}">expand</span>` : ""}
+      ` : ""}
       ${c.deviationFromTemplate?`<div style="font-size:11px;color:#d97706;margin-bottom:4px;">⚠ ${safeStr(c.deviationFromTemplate).slice(0,100)}</div>`:""}
       <div style="font-size:11px;color:#cccccc;line-height:1.5;margin-bottom:6px;">${safeStr(c.reasoning).slice(0,150)}</div>
       ${c.suggestedLanguage?`
@@ -1207,13 +1178,7 @@ async function applyDecisionToDoc(idx, decision) {
   try {
     await Word.run(async (context) => {
 
-      // Comment-origin items: append decision to the existing comment's content
-      if (clause._isComment) {
-        await replyToMatchingComment(context, clause, decision);
-        return;
-      }
-
-      // Regular clauses: find range and insert comment / markup
+      // Find range and insert comment / markup
       const range = await findClauseRange(context, foundText);
       if (!range) return;
 
@@ -1249,47 +1214,6 @@ async function applyDecisionToDoc(idx, decision) {
   }
 }
 
-// Find the exact document comment and append the decision to its content.
-// Word JS API has no replies.add() — we update the comment's own text instead.
-async function replyToMatchingComment(context, clause, decision) {
-  const coll = context.document.body.getComments();
-  coll.load("items/content");
-  await context.sync();
-  if (!coll.items.length) return;
-
-  // Match by stored original content/anchor (set during renderResults)
-  const normOrigContent = normalizeForSearch(clause._commentContent || "").slice(0, 80);
-  const normOrigAnchor  = normalizeForSearch(clause._commentAnchor  || "").slice(0, 80);
-
-  let matched = null;
-  let bestScore = 0;
-  for (const c of coll.items) {
-    const normContent = normalizeForSearch(c.content || "").slice(0, 80);
-    let score = 0;
-    if (normOrigContent && normContent && normContent.includes(normOrigContent.slice(0, 50))) score += 2;
-    if (normOrigAnchor  && normContent && normContent.includes(normOrigAnchor.slice(0,  30))) score += 1;
-    if (score > bestScore) { bestScore = score; matched = c; }
-  }
-  if (!matched) matched = coll.items[0]; // last resort
-
-  const suffix = {
-    accept:    "✓ Accepted",
-    negotiate: clause.suggestedLanguage
-                 ? "↔ Counter: " + clause.suggestedLanguage.slice(0, 300)
-                 : "↔ Counter proposed",
-    reject:    clause.reasoning
-                 ? "✕ Rejected: " + clause.reasoning.slice(0, 300)
-                 : "✕ Rejected",
-    flag:      clause.reasoning
-                 ? "⚑ Flagged: " + clause.reasoning.slice(0, 300)
-                 : "⚑ Flagged for review",
-  }[decision] || "Reviewed";
-
-  // Append decision to the comment's own text (replies.add is not a Word JS API)
-  matched.content = matched.content + "\n\n" + suffix;
-  if (decision === "accept") matched.resolved = true;
-  await context.sync();
-}
 
 function updateProgress() {
   const decided = reviewClauses.filter(c=>c.userDecision).length;
@@ -1727,6 +1651,16 @@ function navigateToClause(idx) {
     range.select();
     await context.sync();
   }).catch(e => console.warn("Could not navigate:", e.message));
+}
+
+function navigateToSection(sectionRef) {
+  if (!sectionRef) return;
+  Word.run(async (context) => {
+    const res = context.document.body.search(sectionRef, { matchCase: false, matchWholeWord: false });
+    res.load("items");
+    await context.sync();
+    if (res.items.length > 0) { res.items[0].select(); await context.sync(); }
+  }).catch(e => console.warn("Could not navigate to section:", e.message));
 }
 
 // ── Position Distillation ─────────────────────────────────────────────────────
