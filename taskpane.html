@@ -290,7 +290,7 @@
 <!-- Loading screen -->
 <div id="loading-screen">
   <img class="spinner" src="gavel_red_transparent.gif" alt="">
-  <div id="step-indicator">Warming up the grill…</div>
+  <div id="step-indicator">Initializing Office…</div>
 </div>
 
 <!-- Main content (hidden until ready) -->
@@ -321,7 +321,7 @@
     </div>
     <div class="card">
       <div class="section-title">Playbook Summary</div>
-      <div id="playbook-summary" class="text-muted text-xs">Fetching the goods…</div>
+      <div id="playbook-summary" class="text-muted text-xs">Loading from Drive…</div>
     </div>
   </div>
 
@@ -329,7 +329,7 @@
   <div id="view-reviewing" style="display:none">
     <div class="card" style="text-align:center;padding:28px;">
       <img class="spinner" src="gavel_red_transparent.gif" alt="" style="width:80px;height:80px;margin:0 auto 12px;display:block;">
-      <div id="review-header" style="font-weight:600;margin-bottom:6px;color:#ffffff;">Analyzing Document</div>
+      <div style="font-weight:600;margin-bottom:6px;color:#ffffff;">Analyzing Document</div>
       <div id="review-step" class="text-muted text-xs">Reading document text…</div>
     </div>
   </div>
@@ -464,7 +464,7 @@
 
   <div id="resources-loading" style="text-align:center;padding:30px;">
     <img class="spinner" src="gavel_red_transparent.gif" alt="" style="display:block;margin:0 auto 10px;">
-    <div id="resources-loading-text" class="text-xs text-muted">Fetching the goods…</div>
+    <div class="text-xs text-muted">Loading from Drive…</div>
   </div>
 
   <div id="resources-content" style="display:none;">
@@ -745,11 +745,6 @@ function show(id) {
     document.getElementById(v).style.display = v === id ? "block" : "none";
   });
 }
-const _vibes = ["swagging","rizzing","baking","frying","roasting","grilling","saucing up","marinating","seasoning","flambéing","deep frying","smoking","braising","simmering","glazing","torching","spicing up","slow cooking","wok tossing","drizzling"];
-const _vibe = () => _vibes[Math.floor(Math.random() * _vibes.length)];
-const capitalizeFirst = s => s.charAt(0).toUpperCase() + s.slice(1);
-let _sessionVibe = _vibe();
-
 function setStep(msg) {
   document.getElementById("step-indicator").textContent = msg;
   const el = document.getElementById("review-step");
@@ -776,15 +771,12 @@ function renderPlaybookSummary() {
 
 // ── Review flow ───────────────────────────────────────────────────────────────
 async function startReview() {
-  _sessionVibe = _vibe();
-  const reviewHeader = document.getElementById("review-header");
-  if (reviewHeader) reviewHeader.textContent = capitalizeFirst(_sessionVibe) + " the contract…";
   show("view-reviewing");
-  setStep(capitalizeFirst(_sessionVibe) + " the document…");
+  setStep("Reading document text…");
 
   try {
     // 1. Extract document text, comments, and strikethrough in parallel
-    setStep(capitalizeFirst(_sessionVibe) + " the document…");
+    setStep("Reading document…");
     const [rawText, docComments, struckTexts, coloredTexts, trackedInserts] = await Promise.all([
       getDocumentText(),
       getDocumentComments(),
@@ -797,7 +789,7 @@ async function startReview() {
     const allAdded = [...coloredTexts, ...trackedInserts];
     if (!docText.trim()) { alert("Document appears to be empty."); show("view-idle"); return; }
 
-    const scanLabel = capitalizeFirst(_sessionVibe) + ` ${reviewDocType}${docComments.length ? ` + ${docComments.length} comment${docComments.length>1?"s":""}` : ""}${struckTexts.length ? ` + ${struckTexts.length} strikethrough` : ""}${allAdded.length ? ` + ${allAdded.length} added` : ""}…`;
+    const scanLabel = `Analyzing ${reviewDocType}${docComments.length ? ` + ${docComments.length} comment${docComments.length>1?"s":""}` : ""}${struckTexts.length ? ` + ${struckTexts.length} strikethrough` : ""}${allAdded.length ? ` + ${allAdded.length} added` : ""}…`;
     setStep(scanLabel);
 
     // 2. Build context — filter template to matching doc type
@@ -854,8 +846,7 @@ The completed deals above show past exceptions we accepted under negotiation pre
 
 RULE 5 — STRIKETHROUGH, ADDED TEXT, AND COMMENTS ARE ALWAYS SURFACED.
 Each strikethrough section → its own entry, category "Strikethrough", "found" = exact struck text.
-Each colored/added text or tracked-change insertion listed below → its own entry, category "Added Language", "found" = exact text as listed.
-Additionally: if the submitted document contains any entire clause, section, sentence, or significant block of text that has NO equivalent anywhere in the template (i.e. it is purely new language not present in the template at all), create a finding with category "Added Language", "found" = that new text verbatim, recommendation "flag".
+Each colored/added text section → its own entry, category "Added Language", "found" = exact colored text.
 Each document comment → its own entry, category "Comment", "found" = the full comment note text written by the reviewer (NOT the highlighted anchor text — use the "Note:" field from the comment, never the "On:" field).
 
 RULE 6 — RECOMMENDATION REQUIRES BOTH TEMPLATE AND POSITIONS.
@@ -886,7 +877,7 @@ Return JSON only:
     const raw = await callClaude(sys, userMsg, 10000);
     const result = repairJSON(raw);
 
-    setStep("Done " + _sessionVibe + ".");
+    setStep("Done.");
     renderResults(result);
     show("view-results");
 
@@ -952,17 +943,13 @@ function getColoredTexts() {
         paras.load("items");
         await context.sync();
 
-        paras.items.forEach(p => { p.load("text"); p.font.load("color,underline"); });
+        paras.items.forEach(p => { p.load("text"); p.font.load("color"); });
         await context.sync();
 
-        // Flag non-black/non-auto color OR underlined text (underline = tracked insertion display)
-        const isAdded = (color, underline) => {
-          const hasColor = color && (() => {
-            const c = color.replace("#","").toLowerCase();
-            return c !== "" && c !== "auto" && c !== "000000" && c !== "ffffff";
-          })();
-          const hasUnderline = underline && underline !== "None" && underline !== "none";
-          return hasColor || hasUnderline;
+        const isAdded = color => {
+          if (!color) return false;
+          const c = color.replace("#","").toLowerCase();
+          return c !== "" && c !== "auto" && c !== "000000" && c !== "ffffff";
         };
 
         const results = [];
@@ -970,14 +957,14 @@ function getColoredTexts() {
 
         for (const p of paras.items) {
           if (!p.text.trim() || p.text.trim().length < 3) continue;
-          if (isAdded(p.font.color, p.font.underline)) {
-            results.push({ text: p.text.trim(), color: p.font.color || "underline" });
+          if (isAdded(p.font.color)) {
+            results.push({ text: p.text.trim(), color: p.font.color });
           } else {
             needsDeepScan.push(p);
           }
         }
 
-        // Batch word-level scan for paragraphs that may have partial coloring/underline
+        // Batch word-level scan for paragraphs that may have partial coloring
         if (needsDeepScan.length) {
           const splitRanges = needsDeepScan.map(p => {
             const r = p.getTextRanges([" ", "\t"], true);
@@ -987,28 +974,26 @@ function getColoredTexts() {
           await context.sync();
 
           splitRanges.forEach(r => r.items.forEach(item => {
-            item.load("text"); item.font.load("color,underline");
+            item.load("text"); item.font.load("color");
           }));
           await context.sync();
 
           for (const ranges of splitRanges) {
-            let group = [], groupKey = null;
+            let group = [], groupColor = null;
             for (const r of ranges.items) {
-              if (isAdded(r.font.color, r.font.underline) && r.text.trim()) {
-                const key = (r.font.color||"auto").replace("#","").toLowerCase();
-                if (!groupKey || key === groupKey) { group.push(r.text); groupKey = key; }
-                else { if (group.length) results.push({ text: group.join("").trim(), color: groupKey }); group = [r.text]; groupKey = key; }
+              if (isAdded(r.font.color) && r.text.trim()) {
+                const c = r.font.color.replace("#","").toLowerCase();
+                if (!groupColor || c === groupColor) { group.push(r.text); groupColor = c; }
+                else { if (group.length) results.push({ text: group.join("").trim(), color: groupColor }); group = [r.text]; groupColor = c; }
               } else {
-                if (group.length) { results.push({ text: group.join("").trim(), color: groupKey }); group = []; groupKey = null; }
+                if (group.length) { results.push({ text: group.join("").trim(), color: groupColor }); group = []; groupColor = null; }
               }
             }
-            if (group.length) results.push({ text: group.join("").trim(), color: groupKey });
+            if (group.length) results.push({ text: group.join("").trim(), color: groupColor });
           }
         }
 
-        const filtered = results.filter(r => r.text.length > 3);
-        console.log("Added language detected:", filtered.length, filtered.map(r => r.text.slice(0,40)));
-        resolve(filtered);
+        resolve(results.filter(r => r.text.length > 3));
       } catch(e) {
         console.warn("Colored text detection:", e.message);
         resolve([]);
@@ -1025,12 +1010,10 @@ function getTrackedInsertions() {
         const changes = context.document.body.getTrackedChanges();
         changes.load("items/type,items/text");
         await context.sync();
-        console.log("Tracked changes total:", changes.items.length, changes.items.map(c => c.type + ": " + (c.text||"").slice(0,30)));
         const results = changes.items
           .filter(c => (c.type || "").toLowerCase().includes("insert"))
           .map(c => ({ text: (c.text || "").trim(), color: "tracked change" }))
           .filter(c => c.text.length > 3);
-        console.log("Tracked insertions found:", results.length);
         resolve(results);
       } catch(e) {
         console.warn("Tracked insertions:", e.message);
@@ -1045,28 +1028,17 @@ function getDocumentComments() {
   return new Promise((resolve) => {
     Word.run(async (context) => {
       try {
-        // document.getComments() is the standard API (WordApi 1.4).
-        // body.getComments() is not universally available.
-        const coll = context.document.getComments();
+        // Load items + their scalar properties in one pass
+        const coll = context.document.body.getComments();
         coll.load("items/content,items/authorName,items/resolved");
         await context.sync();
 
-        console.log("Comments found:", coll.items.length);
         if (!coll.items.length) { resolve([]); return; }
 
+        // Load anchored ranges one-by-one — batching getRange() with other
+        // loads can silently fail in some Word versions
         const out = [];
         for (const c of coll.items) {
-          // content can be empty in some builds — fall back to contentRange text
-          let commentText = c.content || "";
-          if (!commentText) {
-            try {
-              const cr = c.contentRange;
-              cr.load("text");
-              await context.sync();
-              commentText = cr.text || "";
-            } catch(e) { /* leave empty */ }
-          }
-
           let anchoredText = "";
           try {
             const r = c.getRange();
@@ -1076,14 +1048,12 @@ function getDocumentComments() {
           } catch(re) {
             console.warn("Comment getRange failed:", re.message);
           }
-
           out.push({
             author:       c.authorName || "Reviewer",
-            content:      commentText,
+            content:      c.content    || "",
             anchoredText,
             resolved:     c.resolved
           });
-          console.log("Comment:", { author: c.authorName, content: commentText.slice(0,80), anchoredText: anchoredText.slice(0,40) });
         }
         resolve(out);
       } catch(e) {
@@ -1169,32 +1139,10 @@ function renderClauses() {
   const container = document.getElementById("clauses-list");
   container.innerHTML = reviewClauses.map((c,i) => {
     const dec = c.userDecision || c.recommendation;
-    const matchPos = (playbook.clauses||[]).find(p => p.category && c.category &&
-      p.category.toLowerCase().trim() === c.category.toLowerCase().trim());
-    const rec = c.recommendation;
-    const recLabel = {accept:"Accept",negotiate:"Counter",reject:"Reject",flag:"Flag"}[rec] || safeStr(rec);
-    let reasonText;
-    if (c.category === "Strikethrough") {
-      reasonText = recLabel + " — strikethrough text detected in document";
-    } else if (c.category === "Added Language") {
-      reasonText = recLabel + " — added/colored text detected in document";
-    } else if (matchPos) {
-      const posReasons = {
-        accept:    recLabel + " — within standard position for " + safeStr(matchPos.category),
-        negotiate: recLabel + " — outside standard; fallback language applies for " + safeStr(matchPos.category),
-        reject:    recLabel + " — exceeds hard limit for " + safeStr(matchPos.category),
-        flag:      recLabel + " — ambiguous deviation from " + safeStr(matchPos.category) + " position",
-      };
-      reasonText = posReasons[rec] || recLabel + " — based on " + safeStr(matchPos.category) + " position";
-    } else {
-      const tmplReasons = {
-        accept:    recLabel + " — follows template language",
-        negotiate: recLabel + " — deviates from template; standard language available",
-        reject:    recLabel + " — significant deviation from template",
-        flag:      recLabel + " — unclear deviation; manual review needed",
-      };
-      reasonText = tmplReasons[rec] || recLabel + " — based on template review";
-    }
+    const matchPos = c.suggestedLanguage
+      ? (playbook.clauses||[]).find(p => p.category && c.category &&
+          p.category.toLowerCase().trim() === c.category.toLowerCase().trim())
+      : null;
     return `
     <div class="clause-card ${dec}" id="clause-${i}">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:6px;">
@@ -1211,7 +1159,13 @@ function renderClauses() {
             flag:      'background:rgba(249,115,22,0.1);color:#f97316;border:1px solid rgba(249,115,22,0.4)',
           }[c.recommendation] || 'background:rgba(255,255,255,0.03);color:#888888;border:1px solid rgba(255,255,255,0.15)'}">AI: ${{negotiate:'Counter'}[c.recommendation]||safeStr(c.recommendation)}</span>
         </div>
-        <span class="info-icon">i<span class="info-tip">${escHtml(reasonText)}</span></span>
+        <span class="info-icon">i<span class="info-tip">${
+          c.category === "Strikethrough"
+            ? "Source: Strikethrough text detected in document"
+            : c.category === "Added Language"
+              ? "Source: Colored/added text detected in document"
+              : `Source: Deviation from ${reviewDocType} template${c.deviationFromTemplate ? " — " + escHtml(safeStr(c.deviationFromTemplate).slice(0,120)) : ""}`
+        }</span></span>
       </div>
       ${c._isComment && c._commentContent ? `
       <div class="found-box" onclick="navigateToClause(${i})" title="Click to jump to comment location in document">
@@ -1622,8 +1576,6 @@ async function driveUploadFile(token, folderId, file) {
 
 // ── Resources ─────────────────────────────────────────────────────────────────
 async function loadResources() {
-  const rlt = document.getElementById("resources-loading-text");
-  if (rlt) rlt.textContent = capitalizeFirst(_vibe()) + " the resources…";
   document.getElementById("resources-loading").style.display = "block";
   document.getElementById("resources-content").style.display = "none";
   document.getElementById("resources-empty").style.display = "none";
@@ -1800,7 +1752,7 @@ async function distillPositions() {
     return;
   }
 
-  status.innerHTML = '<span style="color:#888">' + capitalizeFirst(_vibe()) + ' ' + completed.length + ' contract' + (completed.length > 1 ? 's' : '') + '…</span>';
+  status.innerHTML = '<span style="color:#888">Analyzing ' + completed.length + ' contract' + (completed.length > 1 ? 's' : '') + '…</span>';
 
   const contractsCtx = completed.map((c, i) =>
     `--- CONTRACT ${i + 1} (${c.type || "Unknown type"}) ---\n${anonymizeForAI(c.text.slice(0, 8000))}`
