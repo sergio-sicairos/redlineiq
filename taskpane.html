@@ -1124,7 +1124,7 @@ function renderClauses() {
       </div>
       <div class="found-box" onclick="navigateToClause(${i})" title="Click to jump to this section in the document">
         <div style="font-size:10px;color:#555555;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Found in document</div>
-        <span id="found-text-${i}" style="font-size:11px;color:#cccccc;">${safeStr(c.found).length > 120 ? safeStr(c.found).slice(0,120) + "…" : safeStr(c.found)}</span>
+        <span id="found-text-${i}" style="font-size:11px;color:#cccccc;">${escHtml(safeStr(c.found).length > 120 ? safeStr(c.found).slice(0,120) + "…" : safeStr(c.found))}</span>
       </div>
       ${safeStr(c.found).length > 120 ? `<span style="color:#e02020;font-size:10px;cursor:pointer;display:block;margin-bottom:4px;" onclick="toggleFoundText(${i})" id="expand-btn-${i}">expand</span>` : ""}
       ${c.deviationFromTemplate?`<div style="font-size:11px;color:#d97706;margin-bottom:4px;">⚠ ${safeStr(c.deviationFromTemplate).slice(0,100)}</div>`:""}
@@ -1702,7 +1702,7 @@ async function findClauseRange(context, foundText) {
 }
 
 let _navGen = 0;
-async function navigateToClause(idx) {
+function navigateToClause(idx) {
   const gen = ++_navGen;
   const foundText = (reviewClauses[idx] && reviewClauses[idx].found) || "";
   if (!foundText) return;
@@ -1712,17 +1712,13 @@ async function navigateToClause(idx) {
   const card = document.getElementById("clause-" + idx);
   if (card) card.classList.add("nav-active");
 
-  try {
-    await Word.run(async (context) => {
-      if (gen !== _navGen) return; // Superseded by a newer click
-      const range = await findClauseRange(context, foundText);
-      if (gen !== _navGen || !range) return;
-      range.select();
-      await context.sync();
-    });
-  } catch(e) {
-    console.warn("Could not navigate:", e.message);
-  }
+  Word.run(async (context) => {
+    if (gen !== _navGen) return; // Superseded by a newer click
+    const range = await findClauseRange(context, foundText);
+    if (gen !== _navGen || !range) return;
+    range.select();
+    await context.sync();
+  }).catch(e => console.warn("Could not navigate:", e.message));
 }
 
 // ── Position Distillation ─────────────────────────────────────────────────────
@@ -1989,6 +1985,9 @@ function safeStr(v) {
   if (!v) return "";
   if (typeof v === "string") return v;
   return JSON.stringify(v);
+}
+function escHtml(s) {
+  return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
 function repairJSON(raw) {
