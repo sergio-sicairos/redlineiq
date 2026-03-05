@@ -807,100 +807,51 @@ async function startReview() {
 
     const scanLabel = `Analyzing ${reviewDocType}${docComments.length ? ` + ${docComments.length} comment${docComments.length>1?"s":""}` : ""}${struckTexts.length ? ` + ${struckTexts.length} strikethrough` : ""}${allAdded.length ? ` + ${allAdded.length} added` : ""}…`;
     setStep(scanLabel);
-    await new Promise(r => setTimeout(r, 50)); // force repaint before sync block
+    await new Promise(r => setTimeout(r, 50));
 
-    // 2. Build context — filter template to matching doc type
-    const playbookCtx = (playbook.clauses||[]).map(c =>
-      `[${c.category}]\n  Standard: ${anonymizeForAI(c.standardLang||"").slice(0,300)}${c.fallbackLang?`\n  Fallback: ${anonymizeForAI(c.fallbackLang).slice(0,200)}`:""}${c.hardLimit?`\n  Hard Limit (never accept): ${anonymizeForAI(c.hardLimit)}`:""}${c.notes?`\n  Notes: ${anonymizeForAI(c.notes)}`:""}`
-    ).join("\n\n");
+    // 2. Build signal list — one item per detected change
+    const items = [
+      ...docComments.map(c => ({ type: "Comment", text: c.content || "", anchor: c.anchoredText || "", author: c.author || "" })),
+      ...struckTexts.map(t => ({ type: "Removed Language", text: t, anchor: "", author: "" })),
+      ...allAdded.map(a => ({ type: "Added Language", text: a.text, anchor: "", author: "" })),
+    ].filter(i => i.text.trim().length > 2);
 
-    const equivTypes = getEquivalentTypes(reviewDocType);
-    const matchingTemplates = (playbook.contracts||[]).filter(c => {
-      if (c.category !== "templates") return false;
-      const cType = (c.type||"").toUpperCase();
-      const cName = (c.name||"").toUpperCase();
-      return equivTypes.some(t => cType === t || cType.includes(t) || t.includes(cType))
-          || equivTypes.some(t => cName.includes(t));
-    });
-    const tplCtx = matchingTemplates
-      .map(c=>`[TEMPLATE ${reviewDocType}] ${c.name}:\n${(c.text||"").slice(0,8000)}`).join("\n\n");
-
-    const commentsCtx = docComments.length
-      ? docComments.map((c, i) =>
-          `[COMMENT ${i+1}]${c.resolved ? " (resolved)" : ""} By: ${c.author} | On: "${c.anchoredText.slice(0,150)}" | Note: "${c.content.slice(0,300)}"`
-        ).join("\n")
-      : "None";
-
-    const struckCtx = struckTexts.length
-      ? struckTexts.map((t, i) => `[STRIKETHROUGH ${i+1}] "${t.slice(0,400)}"`).join("\n")
-      : "None";
-
-    const coloredCtx = allAdded.length
-      ? allAdded.map((t, i) => `[ADDED TEXT ${i+1}] (${t.color}) "${t.text.slice(0,400)}"`).join("\n")
-      : "None";
-
-    const sys = `You are a contract comparison tool. Document type: ${reviewDocType}.
-
-${reviewDocType} TEMPLATE (our standard):
-${tplCtx||"No matching template loaded."}
-
-OUR POSITIONS — use these to calibrate every recommendation (standard language we push for, fallback floors we'll accept under pressure, hard limits we never accept):
-${playbookCtx||"None"}
-
-RULES — read carefully and follow exactly:
-
-RULE 1 — TEMPLATE IS THE ONLY SOURCE OF TRUTH.
-Compare the submitted document word-for-word against the template. If a section, clause, term, or number in the submitted document matches the template, DO NOT flag it. Do not comment on it. Do not suggest changes to it. It is correct. Example: if the template says "30 days notice" and the document says "30 days notice" — say nothing about that section.
-
-RULE 2 — ONLY FLAG LITERAL TEXT DIFFERENCES.
-A finding is ONLY valid if the submitted document contains language that is materially different from or absent from the template. You must be able to point to the exact words in the document that differ from the template. If you cannot point to a specific textual difference, do not create a finding.
-
-RULE 3 — DO NOT USE YOUR OWN LEGAL OPINION.
-You have no opinion. You do not know what is "better" or "more standard" in the industry. You do not suggest improvements based on general legal knowledge. The template is correct. Your only job is to find where the submitted document deviates from it.
-
-RULE 4 — COMPLETED DEALS ARE NOT RECOMMENDATIONS.
-The completed deals above show past exceptions we accepted under negotiation pressure. They are NOT our position. Do not use them to flag anything. Only reference them in "suggestedLanguage" if the counterparty has already deviated from the template and you need to show what we have accepted before as a fallback.
-
-RULE 5 — STRIKETHROUGH, ADDED TEXT, AND COMMENTS ARE ALWAYS SURFACED.
-Each strikethrough section → its own entry, category "Strikethrough", "found" = exact struck text.
-Each colored/added text section → its own entry, category "Added Language", "found" = exact colored text.
-Each document comment → its own entry, category "Comment", "found" = the full comment note text written by the reviewer (NOT the highlighted anchor text — use the "Note:" field from the comment, never the "On:" field).
-
-RULE 6 — RECOMMENDATION REQUIRES BOTH TEMPLATE AND POSITIONS.
-Every recommendation must be calibrated using the template deviation AND our positions for that clause category. Follow this decision logic in order:
-
-Step 1 — Identify the clause category (e.g. Limitation of Liability, Indemnification, Payment Terms).
-Step 2 — Look up our position for that category in OUR POSITIONS above.
-Step 3 — Apply:
-  - Deviation triggers our Hard Limit → "reject" (non-negotiable, must revert)
-  - Deviation is outside our Standard Language but our Fallback would cover it → "negotiate"; set suggestedLanguage to our Standard Language as the counter-offer
-  - Deviation is worse than our Fallback (and no Hard Limit defined) → "reject"
-  - Deviation is within our Standard Language or more favorable to us → "accept"
-  - No position exists for this category → use severity of template deviation: minor/favorable = "accept", material/problematic = "negotiate", egregious/one-sided = "reject"
-  - Genuinely ambiguous even after checking positions → "flag"
-
-Always populate suggestedLanguage with our Standard Language (or Fallback if standard is unachievable) for any "negotiate" or "reject" finding where a position exists.
-
-RULE 7 — EXACT FIELDS.
-"sectionRef" = full section number as it appears (e.g. "8.2.1"). "found" = exact verbatim text from the submitted document, never paraphrased.
-
-RULE 8 — NO COMPANY NAMES IN OUTPUT.
-Never include specific company names, counterparty trade names, or customer names in any output field. Use generic terms only: "the counterparty", "the customer", "the vendor", "the parties". This prevents data from one deal from appearing in another.
-
-Return JSON only:
-{"overallRisk":"low|medium|high","summary":"2-3 sentences","clauses":[{"category":"","sectionRef":"","found":"EXACT verbatim","deviationFromTemplate":"","recommendation":"accept|negotiate|reject|flag","reasoning":"","suggestedLanguage":""}],"criticalIssues":[],"autoApprovable":true}`;
-
-    const userMsg = `Review this ${reviewDocType}:\n\n${docText.slice(0, 10000)}\n\nEXISTING DOCUMENT COMMENTS:\n${commentsCtx}\n\nSTRIKETHROUGH SECTIONS DETECTED IN DOCUMENT:\n${struckCtx}\n\nCOLORED/ADDED TEXT DETECTED IN DOCUMENT (non-black font color — likely inserted by counterparty):\n${coloredCtx}`;
-    let _elapsed = 0;
-    const _ticker = setInterval(() => { _elapsed++; setStep(`Sending to AI… (${_elapsed}s)`); }, 1000);
-    let raw;
-    try {
-      raw = await withTimeout(callClaude(sys, userMsg, 4000), 50000, null);
-    } finally {
-      clearInterval(_ticker);
+    if (!items.length) {
+      setStep("No tracked changes or comments found. Add comments or use colored/tracked text to mark changes.");
+      await new Promise(r => setTimeout(r, 4000));
+      show("view-idle");
+      return;
     }
-    if (raw === null) throw new Error("API timed out after 50s — check your API key or network.");
-    const result = repairJSON(raw);
+
+    // 3. Build compact positions context (sent with every item — keep small)
+    const posCtx = (playbook.clauses||[]).map(c =>
+      `[${c.category}]: Standard: ${anonymizeForAI(c.standardLang||"").slice(0,150)}${c.fallbackLang ? ` | Fallback: ${anonymizeForAI(c.fallbackLang).slice(0,100)}` : ""}${c.hardLimit ? ` | Hard Limit: ${anonymizeForAI(c.hardLimit).slice(0,80)}` : ""}`
+    ).join("\n");
+
+    // 4. Review every item in parallel — small focused call per item
+    let completed = 0;
+    setStep(`Reviewing 0 of ${items.length}…`);
+    const clauses = await Promise.all(items.map(async item => {
+      const clause = await withTimeout(reviewSingleItem(item, posCtx, reviewDocType), 30000, null);
+      completed++;
+      setStep(`Reviewing ${completed} of ${items.length}…`);
+      if (!clause) return { category: item.type, found: item.text.slice(0,300), recommendation: "flag", reasoning: "Timed out", sectionRef: "", suggestedLanguage: "", deviationFromTemplate: "" };
+      if (!clause.found) clause.found = item.text.slice(0, 300);
+      return clause;
+    }));
+
+    // 5. Aggregate results
+    const recs = clauses.map(c => c.recommendation);
+    const rejectCount = recs.filter(r => r === "reject").length;
+    const negotiateCount = recs.filter(r => r === "negotiate").length;
+    const overallRisk = rejectCount > 0 ? "high" : negotiateCount > 0 ? "medium" : recs.includes("flag") ? "medium" : "low";
+    const result = {
+      overallRisk,
+      summary: `Reviewed ${items.length} change${items.length !== 1 ? "s" : ""} (${docComments.length} comment${docComments.length !== 1 ? "s" : ""}, ${allAdded.length} addition${allAdded.length !== 1 ? "s" : ""}, ${struckTexts.length} removal${struckTexts.length !== 1 ? "s" : ""}). ${rejectCount} reject, ${negotiateCount} negotiate recommended.`,
+      clauses,
+      criticalIssues: clauses.filter(c => c.recommendation === "reject").map(c => `${c.category}: ${c.reasoning}`),
+      autoApprovable: rejectCount === 0 && negotiateCount === 0,
+    };
 
     setStep("Done.");
     renderResults(result);
@@ -914,6 +865,37 @@ Return JSON only:
     }
   } finally {
     clearTimeout(globalTimer);
+  }
+}
+
+// ── Per-item targeted AI review ──────────────────────────────────────────────
+async function reviewSingleItem(item, posCtx, docType) {
+  const sys = `You are a contract clause reviewer for ${docType} agreements.
+
+OUR POSITIONS — calibrate every recommendation against these:
+${posCtx || "None loaded."}
+
+Decision logic (apply in order):
+- Text triggers a Hard Limit → "reject"
+- Text outside Standard but Fallback covers it → "negotiate"; suggestedLanguage = our Standard
+- Text worse than Fallback → "reject"
+- Text within Standard or favorable to us → "accept"
+- No position for this category → judge severity: minor = "accept", material = "negotiate", egregious = "reject"
+- Genuinely ambiguous → "flag"
+
+Never include company names in output — use "the counterparty", "the customer", "the vendor".
+Return JSON only: {"category":"","sectionRef":"","found":"","deviationFromTemplate":"","recommendation":"accept|negotiate|reject|flag","reasoning":"","suggestedLanguage":""}`;
+
+  const user = `Type: ${item.type}
+${item.anchor ? `Near contract text: "${item.anchor.slice(0, 200)}"` : ""}
+${item.author ? `By: ${item.author}` : ""}
+Text to review: "${item.text.slice(0, 600)}"`;
+
+  const raw = await callClaude(sys, user, 500);
+  try {
+    return repairJSON(raw);
+  } catch(e) {
+    return { category: item.type, found: item.text.slice(0,300), recommendation: "flag", reasoning: "Could not parse response", sectionRef: "", suggestedLanguage: "", deviationFromTemplate: "" };
   }
 }
 
