@@ -329,7 +329,7 @@
   <div id="view-reviewing" style="display:none">
     <div class="card" style="text-align:center;padding:28px;">
       <img class="spinner" src="gavel_red_transparent.gif" alt="" style="width:80px;height:80px;margin:0 auto 12px;display:block;">
-      <div style="font-weight:600;margin-bottom:6px;color:#ffffff;">Analyzing Document</div>
+      <div id="review-header" style="font-weight:600;margin-bottom:6px;color:#ffffff;">Analyzing Document</div>
       <div id="review-step" class="text-muted text-xs">Reading document text…</div>
     </div>
   </div>
@@ -745,6 +745,11 @@ function show(id) {
     document.getElementById(v).style.display = v === id ? "block" : "none";
   });
 }
+const _vibes = ["swagging","rizzing","baking","frying","roasting","grilling","saucing up","marinating","seasoning","smoking","braising","glazing","torching","spicing up","slow cooking","drizzling"];
+function pickVibe() { return _vibes[Math.floor(Math.random() * _vibes.length)]; }
+function capVibe(v) { return v.charAt(0).toUpperCase() + v.slice(1); }
+let _vibe = pickVibe();
+
 function setStep(msg) {
   document.getElementById("step-indicator").textContent = msg;
   const el = document.getElementById("review-step");
@@ -771,12 +776,15 @@ function renderPlaybookSummary() {
 
 // ── Review flow ───────────────────────────────────────────────────────────────
 async function startReview() {
+  _vibe = pickVibe();
   show("view-reviewing");
-  setStep("Reading document text…");
+  const rh = document.getElementById("review-header");
+  if (rh) rh.textContent = capVibe(_vibe) + " the contract…";
+  setStep(capVibe(_vibe) + " the document…");
 
   try {
     // 1. Extract document text, comments, and strikethrough in parallel
-    setStep("Reading document…");
+    setStep(capVibe(_vibe) + " the document…");
     const [rawText, docComments, struckTexts, coloredTexts, trackedInserts] = await Promise.all([
       getDocumentText(),
       getDocumentComments(),
@@ -789,7 +797,7 @@ async function startReview() {
     const allAdded = [...coloredTexts, ...trackedInserts];
     if (!docText.trim()) { alert("Document appears to be empty."); show("view-idle"); return; }
 
-    const scanLabel = `Analyzing ${reviewDocType}${docComments.length ? ` + ${docComments.length} comment${docComments.length>1?"s":""}` : ""}${struckTexts.length ? ` + ${struckTexts.length} strikethrough` : ""}${allAdded.length ? ` + ${allAdded.length} added` : ""}…`;
+    const scanLabel = capVibe(_vibe) + ` ${reviewDocType}${docComments.length ? ` + ${docComments.length} comment${docComments.length>1?"s":""}` : ""}${struckTexts.length ? ` + ${struckTexts.length} strikethrough` : ""}${allAdded.length ? ` + ${allAdded.length} added` : ""}…`;
     setStep(scanLabel);
 
     // 2. Build context — filter template to matching doc type
@@ -877,7 +885,7 @@ Return JSON only:
     const raw = await callClaude(sys, userMsg, 10000);
     const result = repairJSON(raw);
 
-    setStep("Done.");
+    setStep("Done " + _vibe + ".");
     renderResults(result);
     show("view-results");
 
