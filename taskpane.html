@@ -89,7 +89,7 @@
     }
     .found-box:hover { background:rgba(59,130,246,0.08); border-color:rgba(59,130,246,0.35); }
     .found-text-clamped { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
-    .found-expand-btn { font-size:10px; color:#e02020; cursor:pointer; display:block; margin-top:3px; margin-bottom:4px; }
+    .found-expand-btn { font-size:10px; color:#e02020; cursor:pointer; display:none; margin-top:3px; margin-bottom:4px; }
     .clause-card.nav-active.accept    { outline:1px solid rgba(34,197,94,0.55);  box-shadow:0 0 12px rgba(34,197,94,0.1); }
     .clause-card.nav-active.negotiate { outline:1px solid rgba(234,179,8,0.55);  box-shadow:0 0 12px rgba(234,179,8,0.1); }
     .clause-card.nav-active.reject    { outline:1px solid rgba(224,32,32,0.55);  box-shadow:0 0 12px rgba(224,32,32,0.1); }
@@ -319,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260305-K</span>
+        <span style="font-size:9px;color:#6b7280;">v20260306-A</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1240,6 +1240,16 @@ function renderClauses() {
       ${c.applied ? `<div style="font-size:10px;color:#555555;margin-top:6px;">✓ Applied to document</div>` : ""}
     </div>`;
   }).join("");
+  requestAnimationFrame(initFoundExpanders);
+}
+
+function initFoundExpanders() {
+  reviewClauses.forEach((_, i) => {
+    const el = document.getElementById("found-text-" + i);
+    const btn = document.getElementById("expand-btn-" + i);
+    if (!el || !btn) return;
+    btn.style.display = el.scrollHeight > el.clientHeight + 2 ? "block" : "none";
+  });
 }
 
 function toggleFoundText(i) {
@@ -1248,6 +1258,7 @@ function toggleFoundText(i) {
   if (!el || !btn) return;
   const expanded = !el.classList.contains("found-text-clamped");
   el.classList.toggle("found-text-clamped", expanded);
+  btn.style.display = "block";
   btn.textContent = expanded ? "More" : "Less";
 }
 
