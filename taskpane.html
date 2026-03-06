@@ -319,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260306-I</span>
+        <span style="font-size:9px;color:#6b7280;">v20260306-J</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1111,12 +1111,12 @@ function getColoredTexts() {
               if (isAdded(r.font.color) && r.text.trim()) {
                 const c = r.font.color.replace("#","").toLowerCase();
                 if (!groupColor || c === groupColor) { group.push(r.text); groupColor = c; }
-                else { if (group.length) results.push({ text: group.join("").trim(), color: groupColor }); group = [r.text]; groupColor = c; }
+                else { if (group.length) results.push({ text: group.join(" ").trim(), color: groupColor }); group = [r.text]; groupColor = c; }
               } else {
-                if (group.length) { results.push({ text: group.join("").trim(), color: groupColor }); group = []; groupColor = null; }
+                if (group.length) { results.push({ text: group.join(" ").trim(), color: groupColor }); group = []; groupColor = null; }
               }
             }
-            if (group.length) results.push({ text: group.join("").trim(), color: groupColor });
+            if (group.length) results.push({ text: group.join(" ").trim(), color: groupColor });
           }
         }
 
