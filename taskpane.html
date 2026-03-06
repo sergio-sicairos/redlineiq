@@ -1161,8 +1161,7 @@ function renderClauses() {
       <div class="found-box" onclick="event.stopPropagation();navigateToClause(${i})" title="Click to jump to this location in the document">
         <div style="font-size:10px;color:#555555;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Found</div>
         <span id="found-text-${i}" class="found-text-clamped" style="font-size:11px;color:#cccccc;">${escHtml(safeStr(c._isComment ? (c._commentContent || c.found) : c.found))}</span>
-      </div>
-      <span class="found-expand-btn" id="expand-btn-${i}" onclick="event.stopPropagation();toggleFoundText(${i})">expand</span>
+        <span class="found-expand-btn" id="expand-btn-${i}" onclick="event.stopPropagation();toggleFoundText(${i})">More</span>
       ` : ""}
       ${c.deviationFromTemplate?`<div style="font-size:11px;color:#d97706;margin-bottom:4px;">⚠ ${safeStr(c.deviationFromTemplate).slice(0,100)}</div>`:""}
       <div style="font-size:11px;color:#cccccc;line-height:1.5;margin-bottom:6px;">${safeStr(c.reasoning).slice(0,150)}</div>
@@ -1193,7 +1192,7 @@ function toggleFoundText(i) {
   if (!el || !btn) return;
   const expanded = !el.classList.contains("found-text-clamped");
   el.classList.toggle("found-text-clamped", expanded);
-  btn.textContent = expanded ? "expand" : "collapse";
+  btn.textContent = expanded ? "More" : "Less";
 }
 
 function setDecision(idx, decision) {
