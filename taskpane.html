@@ -840,8 +840,11 @@ async function startReview() {
         if (!clause) return { _signalType: item.type, category: "", found: item.text.slice(0,300), recommendation: "flag", reasoning: "Timed out", sectionRef: "", suggestedLanguage: "", deviationFromTemplate: "" };
         if (!clause.found) clause.found = item.text.slice(0, 300);
         clause._signalType = item.type;
-        // Strip sectionRef if it's not a numeric section number (e.g. "8.3")
-        if (clause.sectionRef && !/^\d[\d.]*$/.test(clause.sectionRef.trim())) clause.sectionRef = "";
+        // Extract just the numeric part from sectionRef (e.g. "8.3 Termination..." → "8.3")
+        if (clause.sectionRef) {
+          const m = clause.sectionRef.match(/\b(\d[\d.]*)\b/);
+          clause.sectionRef = m ? m[1] : "";
+        }
         return clause;
       }));
       clauses.push(...results);
