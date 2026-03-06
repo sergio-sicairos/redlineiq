@@ -319,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260306-F</span>
+        <span style="font-size:9px;color:#6b7280;">v20260306-G</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -867,10 +867,17 @@ async function startReview() {
           clause._commentContent = item._commentContent || item.text;
           clause._commentAnchor  = item._commentAnchor  || "";
         }
-        // Extract just the numeric part from sectionRef (e.g. "8.3 Termination..." → "8.3")
+        // Clean up AI sectionRef: keep Exhibit/Schedule as-is; strip title from numeric refs
         if (clause.sectionRef) {
-          const m = clause.sectionRef.match(/\b(\d[\d.]*)\b/);
-          clause.sectionRef = m ? m[1] : "";
+          const ref = clause.sectionRef.trim();
+          if (/^(exhibit|schedule|annex)\b/i.test(ref)) {
+            // Title-case exhibit/schedule refs
+            clause.sectionRef = ref.replace(/\b\w/g, c => c.toUpperCase());
+          } else {
+            // Extract just the leading number (e.g. "8.3 Termination" → "8.3")
+            const m = ref.match(/\b(\d[\d.]*)\b/);
+            clause.sectionRef = m ? m[1] : "";
+          }
         }
         // Fall back to JS-inferred section if AI didn't return one
         if (!clause.sectionRef && item._preSection) {
@@ -942,7 +949,7 @@ ${posCtx || "None loaded."}
 ${decisionLogic}
 
 Never include company names in output — use "the counterparty", "the customer", "the vendor".
-"sectionRef" must be a numeric section number only (e.g. "8.3" or "12.1.2"). If you cannot identify a numeric section number, leave it blank.
+"sectionRef" must be a section number (e.g. "8.3"), exhibit (e.g. "Exhibit A"), or schedule (e.g. "Schedule 1") — whatever heading precedes this text. Leave blank if not identifiable.
 Return JSON only: {"category":"","sectionRef":"","found":"","deviationFromTemplate":"","recommendation":"accept|negotiate|reject|flag","reasoning":"","suggestedLanguage":""}`;
 
   const user = `Type: ${item.type}
@@ -1186,13 +1193,20 @@ function inferSectionFromDoc(searchText, docText) {
   if (pos === -1) return "";
   // Use normalized text consistently — pos is an index into haystack, not docText
   const before = haystack.slice(0, pos);
-  // 1. "Section 8.3" or "section 8" explicit label
+  // 1. Exhibit / Schedule headers — highest priority (text inside an exhibit
+  //    belongs to that exhibit, not the last numbered section before it)
+  const exhibits = [...before.matchAll(/\b(exhibit\s+[a-z0-9]+|schedule\s+[a-z0-9]+|annex\s+[a-z0-9]+)/g)];
+  if (exhibits.length) {
+    // Title-case the match, e.g. "exhibit a" → "Exhibit A"
+    return exhibits[exhibits.length - 1][1].replace(/\b\w/g, c => c.toUpperCase());
+  }
+  // 2. "Section 8.3" or "section 8" explicit label
   const labeled = [...before.matchAll(/\bsection\s+(\d{1,2}(?:\.\d{1,3}){0,3})/g)];
   if (labeled.length) return labeled[labeled.length - 1][1];
-  // 2. Dotted number like "8.3" or "1.2.3"
+  // 3. Dotted number like "8.3" or "1.2.3"
   const dotted = [...before.matchAll(/\b(\d{1,2}(?:\.\d{1,3}){1,3})\b/g)];
   if (dotted.length) return dotted[dotted.length - 1][1];
-  // 3. Section header format "8. Title" — single/double digit at start of a line
+  // 4. Section header format "8. Title" — single/double digit at start of a line
   const headers = [...before.matchAll(/(?:^| )\s{0,4}(\d{1,2})\.\s+[a-z]/g)];
   if (headers.length) return headers[headers.length - 1][1];
   return "";
@@ -1259,7 +1273,7 @@ function renderClauses() {
           "Added Language":   `<span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)">＋ Added Language</span>`,
           "Removed Language": `<span class="badge" style="background:rgba(224,32,32,0.1);color:#e02020;border:1px solid rgba(224,32,32,0.4)">− Removed Language</span>`,
         }[c._signalType] || `<span class="badge" style="background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.4)">${escHtml(safeStr(c._signalType||c.category))}</span>`}
-        ${safeStr(c.sectionRef) ? `<span class="badge" style="background:rgba(59,130,246,0.07);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);cursor:pointer;" onclick="event.stopPropagation();navigateToSection('${escHtml(safeStr(c.sectionRef))}')" title="Jump to section">§ ${escHtml(safeStr(c.sectionRef))}</span>` : ""}
+        ${safeStr(c.sectionRef) ? `<span class="badge" style="background:rgba(59,130,246,0.07);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);cursor:pointer;" onclick="event.stopPropagation();navigateToSection('${escHtml(safeStr(c.sectionRef))}')" title="Jump to section">${/^\d/.test(safeStr(c.sectionRef)) ? "§ " : ""}${escHtml(safeStr(c.sectionRef))}</span>` : ""}
         <span class="badge" style="${{
           accept:    'background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)',
           negotiate: 'background:rgba(234,179,8,0.1);color:#eab308;border:1px solid rgba(234,179,8,0.4)',
