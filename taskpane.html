@@ -319,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260306-G</span>
+        <span style="font-size:9px;color:#6b7280;">v20260306-H</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1185,30 +1185,37 @@ function getDocumentComments() {
 // ── Infer section number from document text near a given string ───────────────
 function inferSectionFromDoc(searchText, docText) {
   if (!searchText || !docText) return "";
-  const norm = s => s.toLowerCase().replace(/\s+/g, " ").trim();
-  const haystack = norm(docText);
-  const needle = norm(searchText.slice(0, 120));
-  if (!needle || needle.length < 3) return "";
-  const pos = haystack.indexOf(needle);
-  if (pos === -1) return "";
-  // Use normalized text consistently — pos is an index into haystack, not docText
-  const before = haystack.slice(0, pos);
-  // 1. Exhibit / Schedule headers — highest priority (text inside an exhibit
-  //    belongs to that exhibit, not the last numbered section before it)
-  const exhibits = [...before.matchAll(/\b(exhibit\s+[a-z0-9]+|schedule\s+[a-z0-9]+|annex\s+[a-z0-9]+)/g)];
-  if (exhibits.length) {
-    // Title-case the match, e.g. "exhibit a" → "Exhibit A"
-    return exhibits[exhibits.length - 1][1].replace(/\b\w/g, c => c.toUpperCase());
+  const snip = searchText.slice(0, 80);
+  // Search original docText first — preserves newlines needed for line-anchored patterns
+  let pos = docText.toLowerCase().indexOf(snip.toLowerCase());
+  let before;
+  if (pos !== -1) {
+    before = docText.slice(0, pos);
+  } else {
+    // Fallback: whitespace-normalized search
+    const norm = s => s.toLowerCase().replace(/\s+/g, " ").trim();
+    const normPos = norm(docText).indexOf(norm(snip));
+    if (normPos === -1) return "";
+    before = norm(docText).slice(0, normPos);
   }
-  // 2. "Section 8.3" or "section 8" explicit label
-  const labeled = [...before.matchAll(/\bsection\s+(\d{1,2}(?:\.\d{1,3}){0,3})/g)];
+
+  // 1. Exhibit / Schedule / Annex heading — must start a line (prevents inline
+  //    references like "as set forth in Exhibit A" from matching)
+  const exhibits = [...before.matchAll(/(?:^|[\r\n])\s*(exhibit\s+[a-z0-9]+|schedule\s+[a-z0-9]+|annex\s+[a-z0-9]+)/gi)];
+  if (exhibits.length) return exhibits[exhibits.length - 1][1].trim().replace(/\b\w/g, c => c.toUpperCase());
+
+  // 2. "Section 8.3" explicit label
+  const labeled = [...before.matchAll(/\bsection\s+(\d{1,2}(?:\.\d{1,3}){0,3})/gi)];
   if (labeled.length) return labeled[labeled.length - 1][1];
+
   // 3. Dotted number like "8.3" or "1.2.3"
   const dotted = [...before.matchAll(/\b(\d{1,2}(?:\.\d{1,3}){1,3})\b/g)];
   if (dotted.length) return dotted[dotted.length - 1][1];
-  // 4. Section header format "8. Title" — single/double digit at start of a line
-  const headers = [...before.matchAll(/(?:^| )\s{0,4}(\d{1,2})\.\s+[a-z]/g)];
+
+  // 4. "8. Title" heading at line start
+  const headers = [...before.matchAll(/(?:^|[\r\n])\s{0,4}(\d{1,2})\.\s+\S/gm)];
   if (headers.length) return headers[headers.length - 1][1];
+
   return "";
 }
 
