@@ -319,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260306-A</span>
+        <span style="font-size:9px;color:#6b7280;">v20260306-B</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -793,7 +793,7 @@ async function startReview() {
     const [rawText, docComments, struckTexts, coloredTexts, trackedInserts] = await Promise.all([
       withTimeout(getDocumentText(),       6000, ""),
       withTimeout(getDocumentComments(),   4000, []),
-      withTimeout(getStrikethroughTexts(), 4000, []),
+      withTimeout(getStrikethroughTexts(), 8000, []),
       withTimeout(getColoredTexts(),       4000, []),
       withTimeout(getTrackedInsertions(),  3000, []),
     ]);
@@ -952,23 +952,56 @@ function getDocumentText() {
 }
 
 // ── Extract all strikethrough text from the document ─────────────────────────
+// Uses OOXML to detect run-level strikethrough (paragraph-level check misses
+// partial strikethrough within a paragraph, which is the common case).
 function getStrikethroughTexts() {
   return new Promise((resolve) => {
     Word.run(async (context) => {
       try {
-        const paragraphs = context.document.body.paragraphs;
-        paragraphs.load("items");
+        const ooxmlProxy = context.document.body.getOoxml();
         await context.sync();
-        paragraphs.items.forEach(p => {
-          p.load("text");
-          p.font.load("strikeThrough");
-        });
-        await context.sync();
-        // Collect paragraphs that are fully struck through
-        const struck = paragraphs.items
-          .filter(p => p.font.strikeThrough && p.text.trim().length > 3)
-          .map(p => p.text.trim());
-        resolve(struck);
+
+        const xml = ooxmlProxy.value || "";
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xml, "text/xml");
+        const WNS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+
+        const hasStrike = (run) => {
+          const rPr = run.getElementsByTagNameNS(WNS, "rPr")[0];
+          if (!rPr) return false;
+          const candidates = [
+            ...rPr.getElementsByTagNameNS(WNS, "strike"),
+            ...rPr.getElementsByTagNameNS(WNS, "dstrike"),
+          ];
+          return candidates.some(el => {
+            const val = el.getAttribute("w:val") || el.getAttributeNS(WNS, "val") || "";
+            return val !== "false" && val !== "0";
+          });
+        };
+
+        const results = [];
+        // Iterate paragraph by paragraph so runs from different paragraphs
+        // are not accidentally merged.
+        for (const para of xmlDoc.getElementsByTagNameNS(WNS, "p")) {
+          let buffer = [];
+          for (const run of para.getElementsByTagNameNS(WNS, "r")) {
+            const tEl = run.getElementsByTagNameNS(WNS, "t")[0];
+            const text = tEl ? tEl.textContent : "";
+            if (hasStrike(run) && text) {
+              buffer.push(text);
+            } else if (buffer.length) {
+              const combined = buffer.join("").trim();
+              if (combined.length > 3) results.push(combined);
+              buffer = [];
+            }
+          }
+          if (buffer.length) {
+            const combined = buffer.join("").trim();
+            if (combined.length > 3) results.push(combined);
+          }
+        }
+
+        resolve([...new Set(results)]);
       } catch(e) {
         console.warn("Strikethrough detection:", e.message);
         resolve([]);
