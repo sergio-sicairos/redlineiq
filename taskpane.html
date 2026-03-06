@@ -319,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260306-H</span>
+        <span style="font-size:9px;color:#6b7280;">v20260306-I</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -815,14 +815,22 @@ async function startReview() {
     ].filter(i => i.text.trim().length > 2);
 
     // Pre-compute section numbers and doc context snippets (pure JS, no API calls)
-    const _norm = s => s.toLowerCase().replace(/\s+/g, " ").trim();
-    const _haystack = _norm(docText);
+    // Minimum 25 chars required before trusting a position match — short/common
+    // phrases (e.g. "shall", "customer") appear many times in a contract and
+    // indexOf() would return the FIRST occurrence, often in the wrong section.
+    const MIN_SEARCH_LEN = 25;
     items.forEach(item => {
-      const searchText = item.anchor || item.text;
+      // For comments: prefer anchor (verbatim doc text); fall back to content only
+      // if anchor is long enough to be uniquely identifying.
+      const searchText = (item.anchor && item.anchor.length >= MIN_SEARCH_LEN)
+        ? item.anchor
+        : (item.type !== "Comment" && item.text.length >= MIN_SEARCH_LEN)
+          ? item.text
+          : "";
+      if (!searchText) return; // not enough context — skip, let AI handle section
       item._preSection = inferSectionFromDoc(searchText, docText);
-      // Capture ~300 chars of docText before this item's position — gives AI section context
-      const needle = _norm(searchText.slice(0, 100));
-      const pos = needle.length >= 3 ? _haystack.indexOf(needle) : -1;
+      // Capture ~300 chars of docText before this item's position for AI context
+      const pos = docText.toLowerCase().indexOf(searchText.slice(0, 80).toLowerCase());
       if (pos > 0) item._docContext = docText.slice(Math.max(0, pos - 300), pos).trim().slice(-300);
     });
 
