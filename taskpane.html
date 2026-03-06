@@ -319,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260306-E</span>
+        <span style="font-size:9px;color:#6b7280;">v20260306-F</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -814,10 +814,16 @@ async function startReview() {
       ...allAdded.map(a => ({ type: "Added Language", text: a.text, anchor: "", author: "" })),
     ].filter(i => i.text.trim().length > 2);
 
-    // Pre-compute section numbers from docText (pure JS, no API calls)
+    // Pre-compute section numbers and doc context snippets (pure JS, no API calls)
+    const _norm = s => s.toLowerCase().replace(/\s+/g, " ").trim();
+    const _haystack = _norm(docText);
     items.forEach(item => {
       const searchText = item.anchor || item.text;
       item._preSection = inferSectionFromDoc(searchText, docText);
+      // Capture ~300 chars of docText before this item's position — gives AI section context
+      const needle = _norm(searchText.slice(0, 100));
+      const pos = needle.length >= 3 ? _haystack.indexOf(needle) : -1;
+      if (pos > 0) item._docContext = docText.slice(Math.max(0, pos - 300), pos).trim().slice(-300);
     });
 
     if (!items.length) {
@@ -940,9 +946,7 @@ Never include company names in output — use "the counterparty", "the customer"
 Return JSON only: {"category":"","sectionRef":"","found":"","deviationFromTemplate":"","recommendation":"accept|negotiate|reject|flag","reasoning":"","suggestedLanguage":""}`;
 
   const user = `Type: ${item.type}
-${item.anchor ? `Near contract text: "${item.anchor.slice(0, 200)}"` : ""}
-${item.author ? `By: ${item.author}` : ""}
-Text to review: "${item.text.slice(0, 600)}"`;
+${item._docContext ? `Preceding document text (use for section number context):\n"${item._docContext}"\n` : ""}${item.anchor ? `Anchored to contract text: "${item.anchor.slice(0, 200)}"\n` : ""}${item.author ? `By: ${item.author}\n` : ""}Text to review: "${item.text.slice(0, 600)}"`;
 
   const fallback = { category: item.type, found: item.text.slice(0,300), recommendation: "flag", reasoning: "", sectionRef: "", suggestedLanguage: "", deviationFromTemplate: "" };
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -1180,13 +1184,17 @@ function inferSectionFromDoc(searchText, docText) {
   if (!needle || needle.length < 3) return "";
   const pos = haystack.indexOf(needle);
   if (pos === -1) return "";
-  const before = docText.slice(0, pos);
-  // First look for "Section X.Y" style labels
-  const labeled = [...before.matchAll(/\bsection\s+(\d{1,2}(?:\.\d{1,3}){0,3})/gi)];
+  // Use normalized text consistently — pos is an index into haystack, not docText
+  const before = haystack.slice(0, pos);
+  // 1. "Section 8.3" or "section 8" explicit label
+  const labeled = [...before.matchAll(/\bsection\s+(\d{1,2}(?:\.\d{1,3}){0,3})/g)];
   if (labeled.length) return labeled[labeled.length - 1][1];
-  // Fall back to dotted numbers like "8.3" or "1.2.3"
+  // 2. Dotted number like "8.3" or "1.2.3"
   const dotted = [...before.matchAll(/\b(\d{1,2}(?:\.\d{1,3}){1,3})\b/g)];
   if (dotted.length) return dotted[dotted.length - 1][1];
+  // 3. Section header format "8. Title" — single/double digit at start of a line
+  const headers = [...before.matchAll(/(?:^| )\s{0,4}(\d{1,2})\.\s+[a-z]/g)];
+  if (headers.length) return headers[headers.length - 1][1];
   return "";
 }
 
