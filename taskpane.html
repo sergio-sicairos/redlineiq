@@ -903,7 +903,7 @@ Text to review: "${item.text.slice(0, 600)}"`;
   const fallback = { category: item.type, found: item.text.slice(0,300), recommendation: "flag", reasoning: "", sectionRef: "", suggestedLanguage: "", deviationFromTemplate: "" };
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const raw = await callClaude(sys, user, 500);
+      const raw = await callClaude(sys, user, 800);
       const parsed = repairJSON(raw);
       return parsed;
     } catch(e) {
@@ -2049,12 +2049,14 @@ function repairJSON(raw) {
   if (!raw) throw new Error("Empty response");
   let c = raw.replace(/```json|```/g,"").trim();
   try { return JSON.parse(c); } catch(_) {
+    // Close any unterminated string first, then balance brackets
+    if ((c.match(/"/g)||[]).length % 2 !== 0) c += '"';
     c = c.replace(/,\s*$/, "");
     const ob=(c.match(/\[/g)||[]).length-(c.match(/]/g)||[]).length;
     const oc=(c.match(/{/g)||[]).length-(c.match(/}/g)||[]).length;
     for(let i=0;i<ob;i++) c+="]";
     for(let i=0;i<oc;i++) c+="}";
-    return JSON.parse(c);
+    try { return JSON.parse(c); } catch(_) { return null; }
   }
 }
 
