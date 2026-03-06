@@ -319,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260305-J</span>
+        <span style="font-size:9px;color:#6b7280;">v20260305-K</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -814,6 +814,12 @@ async function startReview() {
       ...allAdded.map(a => ({ type: "Added Language", text: a.text, anchor: "", author: "" })),
     ].filter(i => i.text.trim().length > 2);
 
+    // Pre-compute section numbers from docText (pure JS, no API calls)
+    items.forEach(item => {
+      const searchText = item.anchor || item.text;
+      item._preSection = inferSectionFromDoc(searchText, docText);
+    });
+
     if (!items.length) {
       setStep("No tracked changes or comments found. Add comments or use colored/tracked text to mark changes.");
       await new Promise(r => setTimeout(r, 4000));
@@ -837,13 +843,17 @@ async function startReview() {
         const clause = await withTimeout(reviewSingleItem(item, posCtx, reviewDocType), 30000, null);
         completed++;
         setStep(`Reviewing ${completed} of ${items.length}…`);
-        if (!clause) return { _signalType: item.type, category: "", found: item.text.slice(0,300), recommendation: "flag", reasoning: "Timed out", sectionRef: "", suggestedLanguage: "", deviationFromTemplate: "" };
+        if (!clause) return { _signalType: item.type, category: "", found: item.text.slice(0,300), recommendation: "flag", reasoning: "Timed out", sectionRef: item._preSection || "", suggestedLanguage: "", deviationFromTemplate: "" };
         if (!clause.found) clause.found = item.text.slice(0, 300);
         clause._signalType = item.type;
         // Extract just the numeric part from sectionRef (e.g. "8.3 Termination..." → "8.3")
         if (clause.sectionRef) {
           const m = clause.sectionRef.match(/\b(\d[\d.]*)\b/);
           clause.sectionRef = m ? m[1] : "";
+        }
+        // Fall back to JS-inferred section if AI didn't return one
+        if (!clause.sectionRef && item._preSection) {
+          clause.sectionRef = item._preSection;
         }
         return clause;
       }));
@@ -1065,10 +1075,27 @@ function getDocumentComments() {
         const coll = context.document.body.getComments();
         coll.load("items/content,items/authorName,items/resolved");
         await context.sync();
-        const out = coll.items.map(c => ({
+
+        const items = coll.items;
+        let anchorTexts = items.map(() => "");
+
+        // Try to load anchor text in one batch sync (2.5s inner timeout)
+        try {
+          const ranges = items.map(c => c.getRange());
+          ranges.forEach(r => r.load("text"));
+          await Promise.race([
+            context.sync(),
+            new Promise((_, rej) => setTimeout(() => rej(new Error("anchor-timeout")), 2500))
+          ]);
+          anchorTexts = ranges.map(r => { try { return r.text || ""; } catch(_) { return ""; } });
+        } catch(_) {
+          // anchor loading timed out or unsupported — continue without it
+        }
+
+        const out = items.map((c, i) => ({
           author:       c.authorName || "Reviewer",
           content:      c.content    || "",
-          anchoredText: "",   // skipped — getRange() causes hangs
+          anchoredText: anchorTexts[i] || "",
           resolved:     c.resolved
         }));
         resolve(out);
@@ -1078,6 +1105,25 @@ function getDocumentComments() {
       }
     }).catch(() => resolve([]));
   });
+}
+
+// ── Infer section number from document text near a given string ───────────────
+function inferSectionFromDoc(searchText, docText) {
+  if (!searchText || !docText) return "";
+  const norm = s => s.toLowerCase().replace(/\s+/g, " ").trim();
+  const haystack = norm(docText);
+  const needle = norm(searchText.slice(0, 120));
+  if (!needle || needle.length < 3) return "";
+  const pos = haystack.indexOf(needle);
+  if (pos === -1) return "";
+  const before = docText.slice(0, pos);
+  // First look for "Section X.Y" style labels
+  const labeled = [...before.matchAll(/\bsection\s+(\d{1,2}(?:\.\d{1,3}){0,3})/gi)];
+  if (labeled.length) return labeled[labeled.length - 1][1];
+  // Fall back to dotted numbers like "8.3" or "1.2.3"
+  const dotted = [...before.matchAll(/\b(\d{1,2}(?:\.\d{1,3}){1,3})\b/g)];
+  if (dotted.length) return dotted[dotted.length - 1][1];
+  return "";
 }
 
 // ── Insert text into Word at cursor ─────────────────────────────────────────
