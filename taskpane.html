@@ -319,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260306-B</span>
+        <span style="font-size:9px;color:#6b7280;">v20260306-C</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -809,7 +809,7 @@ async function startReview() {
 
     // 2. Build signal list — one item per detected change
     const items = [
-      ...docComments.map(c => ({ type: "Comment", text: c.content || "", anchor: c.anchoredText || "", author: c.author || "" })),
+      ...docComments.map(c => ({ type: "Comment", text: c.content || "", anchor: c.anchoredText || "", author: c.author || "", _commentContent: c.content || "", _commentAnchor: c.anchoredText || "" })),
       ...struckTexts.map(t => ({ type: "Removed Language", text: t, anchor: "", author: "" })),
       ...allAdded.map(a => ({ type: "Added Language", text: a.text, anchor: "", author: "" })),
     ].filter(i => i.text.trim().length > 2);
@@ -843,9 +843,24 @@ async function startReview() {
         const clause = await withTimeout(reviewSingleItem(item, posCtx, reviewDocType), 30000, null);
         completed++;
         setStep(`Reviewing ${completed} of ${items.length}…`);
-        if (!clause) return { _signalType: item.type, category: "", found: item.text.slice(0,300), recommendation: "flag", reasoning: "Timed out", sectionRef: item._preSection || "", suggestedLanguage: "", deviationFromTemplate: "" };
-        if (!clause.found) clause.found = item.text.slice(0, 300);
+        if (!clause) return {
+          _signalType: item.type,
+          _isComment: item.type === "Comment",
+          _commentContent: item._commentContent || "",
+          _commentAnchor: item._commentAnchor || "",
+          category: "", found: item.text, recommendation: "flag",
+          reasoning: "Timed out", sectionRef: item._preSection || "",
+          suggestedLanguage: "", deviationFromTemplate: ""
+        };
+        // Always use full original text as found (not AI's truncated version)
+        clause.found = item.text;
         clause._signalType = item.type;
+        // For comments, attach original content/anchor so the found box shows the full comment
+        if (item.type === "Comment") {
+          clause._isComment = true;
+          clause._commentContent = item._commentContent || item.text;
+          clause._commentAnchor  = item._commentAnchor  || "";
+        }
         // Extract just the numeric part from sectionRef (e.g. "8.3 Termination..." → "8.3")
         if (clause.sectionRef) {
           const m = clause.sectionRef.match(/\b(\d[\d.]*)\b/);
@@ -1174,24 +1189,7 @@ function insertIntoDoc(text) {
 
 // ── Render results ────────────────────────────────────────────────────────────
 function renderResults(result) {
-  reviewClauses = (result.clauses||[]).map(c => {
-    const clause = {...c, userDecision: null, userNotes: ""};
-    if (lastDocComments.length && c.category === "Comment") {
-      const normFound = normalizeForSearch(c.found || "").slice(0, 80);
-      const match = lastDocComments.find(dc => {
-        const normContent = normalizeForSearch(dc.content || "").slice(0, 80);
-        return normFound && normContent && (
-          normFound.includes(normContent.slice(0, 50)) || normContent.includes(normFound.slice(0, 50))
-        );
-      }) || lastDocComments[0];
-      if (match) {
-        clause._isComment      = true;
-        clause._commentContent = match.content;
-        clause._commentAnchor  = match.anchoredText;
-      }
-    }
-    return clause;
-  });
+  reviewClauses = (result.clauses||[]).map(c => ({...c, userDecision: null, userNotes: ""}));
 
   // Sort clauses by their position in the document (top to bottom).
   // Strip all non-alphanumeric chars before comparing so punctuation
