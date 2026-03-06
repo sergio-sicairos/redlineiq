@@ -840,6 +840,8 @@ async function startReview() {
         if (!clause) return { _signalType: item.type, category: "", found: item.text.slice(0,300), recommendation: "flag", reasoning: "Timed out", sectionRef: "", suggestedLanguage: "", deviationFromTemplate: "" };
         if (!clause.found) clause.found = item.text.slice(0, 300);
         clause._signalType = item.type;
+        // Strip sectionRef if it's not a numeric section number (e.g. "8.3")
+        if (clause.sectionRef && !/^\d[\d.]*$/.test(clause.sectionRef.trim())) clause.sectionRef = "";
         return clause;
       }));
       clauses.push(...results);
@@ -890,6 +892,7 @@ Decision logic (apply in order):
 - Genuinely ambiguous → "flag"
 
 Never include company names in output — use "the counterparty", "the customer", "the vendor".
+"sectionRef" must be a numeric section number only (e.g. "8.3" or "12.1.2"). If you cannot identify a numeric section number, leave it blank.
 Return JSON only: {"category":"","sectionRef":"","found":"","deviationFromTemplate":"","recommendation":"accept|negotiate|reject|flag","reasoning":"","suggestedLanguage":""}`;
 
   const user = `Type: ${item.type}
