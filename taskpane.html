@@ -319,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260306-L</span>
+        <span style="font-size:9px;color:#6b7280;">v20260306-M</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1083,20 +1083,14 @@ function getColoredTexts() {
         paras.load("items");
         await context.sync();
 
-        paras.items.forEach(p => { p.load("text"); p.font.load("color"); p.font.load("underline"); });
+        paras.items.forEach(p => { p.load("text"); p.font.load("color"); });
         await context.sync();
 
-        // A range is "added language" if it has a non-black explicit color OR is underlined
-        // with a non-auto, non-black color. Red+underline from Track Changes often reports
-        // font.color as "auto" but retains explicit underline — underline catches that case.
-        const isAdded = (color, underline) => {
+        // Added language = text whose color differs from the document default (black/auto).
+        // Tracked insertions (red+underline from TC) are handled separately via <w:ins> OOXML.
+        const isAdded = color => {
           const c = (color || "").replace("#","").toLowerCase();
-          // Explicit non-black, non-auto color
-          if (c !== "" && c !== "auto" && c !== "000000" && c !== "ffffff") return true;
-          // Underlined + not plain black — catches TC-styled red+underline where
-          // color reports as "auto" because the style applies the color, not inline formatting
-          if (underline && underline.toLowerCase() !== "none" && c !== "000000") return true;
-          return false;
+          return c !== "" && c !== "auto" && c !== "000000" && c !== "ffffff";
         };
 
         const results = [];
@@ -1104,7 +1098,7 @@ function getColoredTexts() {
 
         for (const p of paras.items) {
           if (!p.text.trim() || p.text.trim().length < 3) continue;
-          if (isAdded(p.font.color, p.font.underline)) {
+          if (isAdded(p.font.color)) {
             results.push({ text: p.text.trim(), color: p.font.color });
           } else {
             needsDeepScan.push(p);
@@ -1121,14 +1115,14 @@ function getColoredTexts() {
           await context.sync();
 
           splitRanges.forEach(r => r.items.forEach(item => {
-            item.load("text"); item.font.load("color"); item.font.load("underline");
+            item.load("text"); item.font.load("color");
           }));
           await context.sync();
 
           for (const ranges of splitRanges) {
             let group = [], groupColor = null;
             for (const r of ranges.items) {
-              if (isAdded(r.font.color, r.font.underline) && r.text.trim()) {
+              if (isAdded(r.font.color) && r.text.trim()) {
                 const c = (r.font.color || "").replace("#","").toLowerCase();
                 if (!groupColor || c === groupColor) { group.push(r.text); groupColor = c; }
                 else { if (group.length) results.push({ text: group.join(" ").trim(), color: groupColor }); group = [r.text]; groupColor = c; }
