@@ -146,8 +146,8 @@
       width:60px; height:60px; display:inline-block; object-fit:contain;
     }
     @keyframes phraseGlow {
-      0%, 100% { text-shadow: 0 0 6px rgba(224,32,32,0.4), 0 0 14px rgba(224,32,32,0.2); opacity: 0.85; }
-      50%       { text-shadow: 0 0 14px rgba(224,32,32,0.9), 0 0 28px rgba(224,32,32,0.5); opacity: 1; }
+      0%, 100% { text-shadow: 0 0 6px rgba(255,255,255,0.3), 0 0 14px rgba(255,255,255,0.1); opacity: 0.75; }
+      50%       { text-shadow: 0 0 12px rgba(255,255,255,0.7), 0 0 24px rgba(255,255,255,0.3); opacity: 1; }
     }
     #review-phrase.glowing {
       animation: phraseGlow 1.8s ease-in-out infinite;
@@ -326,7 +326,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260307-A</span>
+        <span style="font-size:9px;color:#6b7280;">v20260307-B</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -893,7 +893,7 @@ async function startReview() {
 
     // 4. Review items in batches of 3 to avoid rate limits
     let completed = 0;
-    setStep(`Reviewing 0 of ${items.length}…`);
+    setStep(`Analyzing 0 of ${items.length}…`);
     const clauses = [];
     const BATCH = 3;
     for (let i = 0; i < items.length; i += BATCH) {
@@ -901,7 +901,7 @@ async function startReview() {
       const results = await Promise.all(batch.map(async item => {
         const clause = await withTimeout(reviewSingleItem(item, posCtx, reviewDocType), 30000, null);
         completed++;
-        setStep(`Reviewing ${completed} of ${items.length}…`);
+        setStep(`Analyzing ${completed} of ${items.length}…`);
         if (!clause) return {
           _signalType: item.type,
           _isComment: item.type === "Comment",
