@@ -319,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260306-P</span>
+        <span style="font-size:9px;color:#6b7280;">v20260306-Q</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1307,19 +1307,18 @@ function renderClauses() {
     const dec = c.userDecision || c.recommendation;
     return `
     <div class="clause-card ${dec}" id="clause-${i}" onclick="cardClick(event,${i})">
-      <div style="display:flex;align-items:flex-start;gap:5px;flex-wrap:wrap;margin-bottom:6px;">
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:6px;">
         ${{
           "Comment":          `<span class="badge" style="background:rgba(255,255,255,0.08);color:#ffffff;border:1px solid rgba(255,255,255,0.25)">💬 Comment</span>`,
           "Added Language":   `<span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)">＋ Added Language</span>`,
           "Removed Language": `<span class="badge" style="background:rgba(224,32,32,0.1);color:#e02020;border:1px solid rgba(224,32,32,0.4)">− Removed Language</span>`,
         }[c._signalType] || `<span class="badge" style="background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.4)">${escHtml(safeStr(c._signalType||c.category))}</span>`}
-        ${safeStr(c.sectionRef) ? `<span class="badge" style="background:rgba(59,130,246,0.07);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);cursor:pointer;" onclick="event.stopPropagation();navigateToSection('${escHtml(safeStr(c.sectionRef))}')" title="Jump to section">${/^\d/.test(safeStr(c.sectionRef)) ? "§ " : ""}${escHtml(safeStr(c.sectionRef))}</span>` : ""}
-        <span class="badge" style="${{
+        <span style="margin-left:auto"><span class="badge" style="${{
           accept:    'background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)',
           negotiate: 'background:rgba(234,179,8,0.1);color:#eab308;border:1px solid rgba(234,179,8,0.4)',
           reject:    'background:rgba(224,32,32,0.1);color:#e02020;border:1px solid rgba(224,32,32,0.4)',
           flag:      'background:rgba(249,115,22,0.1);color:#f97316;border:1px solid rgba(249,115,22,0.4)',
-        }[c.recommendation] || 'background:rgba(255,255,255,0.03);color:#888888;border:1px solid rgba(255,255,255,0.15)'}">${{accept:"Accept",negotiate:"Counter",reject:"Reject",flag:"Flag"}[c.recommendation]||safeStr(c.recommendation)}</span>
+        }[c.recommendation] || 'background:rgba(255,255,255,0.03);color:#888888;border:1px solid rgba(255,255,255,0.15)'}">${{accept:"Accept",negotiate:"Counter",reject:"Reject",flag:"Flag"}[c.recommendation]||safeStr(c.recommendation)}</span></span>
       </div>
       ${(c._isComment ? (c._commentContent || c.found) : c.found) ? `
       <div class="found-box" onclick="event.stopPropagation();navigateToClause(${i})" title="Click to jump to this location in the document">
