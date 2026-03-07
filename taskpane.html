@@ -319,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260306-V</span>
+        <span style="font-size:9px;color:#6b7280;">v20260306-W</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1400,7 +1400,7 @@ async function rephraseSuggestion(idx) {
   if (btn) { btn.disabled = true; btn.textContent = "…"; }
   try {
     const result = await callClaude(
-      "You are a contract drafting assistant. Rewrite the provided clause language to be more concise and plain-spoken while preserving the legal intent. Return only the rewritten text — no explanation, no quotes.",
+      "Rewrite this contract clause to be as short and plain as possible. Use everyday language — no legal jargon, no passive voice, no filler. Cut every word that isn't essential. Keep the core obligation intact. Return only the rewritten text, nothing else.",
       c.suggestedLanguage,
       400
     );
