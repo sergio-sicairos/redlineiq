@@ -224,11 +224,10 @@
     }
     .info-icon:hover { border-color:#ffffff; color:#ffffff; }
     .info-icon .info-tip {
-      display:none; position:absolute; right:0; top:22px; z-index:99;
+      display:none; position:absolute; right:0; top:20px; z-index:99;
       background:#1e1e1e; border:1px solid rgba(255,255,255,0.25);
-      color:#cccccc; font-size:11px; font-weight:400; line-height:1.5;
-      padding:8px 10px; width:240px; white-space:normal; pointer-events:none;
-      box-shadow:0 4px 16px rgba(0,0,0,0.5);
+      color:#cccccc; font-size:10px; font-weight:400; line-height:1.4;
+      padding:6px 9px; width:200px; white-space:normal; pointer-events:none;
     }
     .info-icon:hover .info-tip { display:block; }
   </style>
@@ -320,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260306-T</span>
+        <span style="font-size:9px;color:#6b7280;">v20260306-S</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1314,20 +1313,12 @@ function renderClauses() {
           "Added Language":   `<span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)">＋ Added Language</span>`,
           "Removed Language": `<span class="badge" style="background:rgba(224,32,32,0.1);color:#e02020;border:1px solid rgba(224,32,32,0.4)">− Removed Language</span>`,
         }[c._signalType] || `<span class="badge" style="background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.4)">${escHtml(safeStr(c._signalType||c.category))}</span>`}
-        <span style="margin-left:auto;display:flex;align-items:center;gap:6px;">
-          ${(c.reasoning || c.deviationFromTemplate) ? (() => {
-            const parts = [];
-            if (c.deviationFromTemplate) parts.push(`<span style="color:#d97706">⚠ ${escHtml(safeStr(c.deviationFromTemplate))}</span>`);
-            if (c.reasoning) parts.push(escHtml(safeStr(c.reasoning)));
-            return `<span class="info-icon" onclick="event.stopPropagation()">i<span class="info-tip">${parts.join('<br><br>')}</span></span>`;
-          })() : ""}
-          <span class="badge" style="${{
-            accept:    'background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)',
-            negotiate: 'background:rgba(234,179,8,0.1);color:#eab308;border:1px solid rgba(234,179,8,0.4)',
-            reject:    'background:rgba(224,32,32,0.1);color:#e02020;border:1px solid rgba(224,32,32,0.4)',
-            flag:      'background:rgba(249,115,22,0.1);color:#f97316;border:1px solid rgba(249,115,22,0.4)',
-          }[c.recommendation] || 'background:rgba(255,255,255,0.03);color:#888888;border:1px solid rgba(255,255,255,0.15)'}">${{accept:"Accept",negotiate:"Counter",reject:"Reject",flag:"Flag"}[c.recommendation]||safeStr(c.recommendation)}</span>
-        </span>
+        <span style="margin-left:auto"><span class="badge" style="${{
+          accept:    'background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)',
+          negotiate: 'background:rgba(234,179,8,0.1);color:#eab308;border:1px solid rgba(234,179,8,0.4)',
+          reject:    'background:rgba(224,32,32,0.1);color:#e02020;border:1px solid rgba(224,32,32,0.4)',
+          flag:      'background:rgba(249,115,22,0.1);color:#f97316;border:1px solid rgba(249,115,22,0.4)',
+        }[c.recommendation] || 'background:rgba(255,255,255,0.03);color:#888888;border:1px solid rgba(255,255,255,0.15)'}">${{accept:"Accept",negotiate:"Counter",reject:"Reject",flag:"Flag"}[c.recommendation]||safeStr(c.recommendation)}</span></span>
       </div>
       ${(c._isComment ? (c._commentContent || c.found) : c.found) ? `
       <div class="found-box" onclick="event.stopPropagation();navigateToClause(${i})" title="Click to jump to this location in the document">
@@ -1336,6 +1327,8 @@ function renderClauses() {
         <span class="found-expand-btn" id="expand-btn-${i}" onclick="event.stopPropagation();toggleFoundText(${i})">More</span>
       </div>
       ` : ""}
+      ${c.deviationFromTemplate?`<div style="font-size:11px;color:#d97706;margin-bottom:4px;">⚠ ${safeStr(c.deviationFromTemplate).slice(0,100)}</div>`:""}
+      <div style="font-size:11px;color:#cccccc;line-height:1.5;margin-bottom:6px;">${safeStr(c.reasoning).slice(0,150)}</div>
       ${c.suggestedLanguage?`
         <div style="font-size:11px;color:#cccccc;background:rgba(255,255,255,0.03);padding:7px;margin-bottom:6px;line-height:1.4;border:1px solid rgba(255,255,255,0.15);border-left:2px solid rgba(224,32,32,0.7);">
           <strong style="color:#ffffff">Suggested:</strong>
