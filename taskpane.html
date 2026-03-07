@@ -326,7 +326,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260307-C</span>
+        <span style="font-size:9px;color:#6b7280;">v20260307-D</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1577,9 +1577,7 @@ async function applyDecisionToDoc(idx, decision) {
         await context.sync();
         const comment = coll.items[clause._commentIdx];
         if (!comment) return;
-        const replyText = clause.suggestedLanguage
-          ? "↔ Counter Proposed:\n" + clause.suggestedLanguage
-          : "↔ Counter proposed — see playbook for suggested language.";
+        const replyText = clause.suggestedLanguage || "↔ Counter proposed — see playbook for suggested language.";
         comment.reply(replyText);
         await context.sync();
       });
@@ -1600,9 +1598,7 @@ async function applyDecisionToDoc(idx, decision) {
       if (!range) return;
 
       if (decision === "negotiate") {
-        const counter = clause.suggestedLanguage
-          ? "↔ Counter Proposed:\n" + clause.suggestedLanguage
-          : "↔ Counter proposed — see playbook for suggested language.";
+        const counter = clause.suggestedLanguage || "↔ Counter proposed — see playbook for suggested language.";
         range.insertComment(counter);
 
       } else if (decision === "reject") {
