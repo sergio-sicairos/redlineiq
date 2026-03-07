@@ -319,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260306-K</span>
+        <span style="font-size:9px;color:#6b7280;">v20260306-L</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -790,16 +790,17 @@ async function startReview() {
   try {
     // 1. Extract document text, comments, and strikethrough in parallel
     setStep("Reading document…");
-    const [rawText, docComments, struckTexts, coloredTexts, trackedInserts] = await Promise.all([
-      withTimeout(getDocumentText(),       6000, ""),
-      withTimeout(getDocumentComments(),   4000, []),
-      withTimeout(getStrikethroughTexts(), 8000, []),
-      withTimeout(getColoredTexts(),       4000, []),
-      withTimeout(getTrackedInsertions(),  3000, []),
+    const [rawText, docComments, ooxmlChanges, coloredTexts] = await Promise.all([
+      withTimeout(getDocumentText(),    6000, ""),
+      withTimeout(getDocumentComments(),4000, []),
+      withTimeout(getOoxmlChanges(),    8000, { struck: [], inserted: [] }),
+      withTimeout(getColoredTexts(),    4000, []),
     ]);
     if (_reviewCancelled) return;
     docText = rawText;
     lastDocComments = docComments;
+    const struckTexts   = ooxmlChanges.struck;
+    const trackedInserts = ooxmlChanges.inserted;
     const allAdded = [...coloredTexts, ...trackedInserts];
     if (!docText.trim()) { alert("Document appears to be empty."); show("view-idle"); return; }
 
@@ -1001,10 +1002,10 @@ function getDocumentText() {
   });
 }
 
-// ── Extract all strikethrough text from the document ─────────────────────────
-// Uses OOXML to detect run-level strikethrough (paragraph-level check misses
-// partial strikethrough within a paragraph, which is the common case).
-function getStrikethroughTexts() {
+// ── Extract strikethrough + tracked insertions via a single OOXML fetch ───────
+// Combined to avoid fetching OOXML twice and to reliably detect <w:ins> tags
+// regardless of Word.js API version (getTrackedChanges() requires v1.6+).
+function getOoxmlChanges() {
   return new Promise((resolve) => {
     Word.run(async (context) => {
       try {
@@ -1029,34 +1030,46 @@ function getStrikethroughTexts() {
           });
         };
 
-        const results = [];
-        // Iterate paragraph by paragraph so runs from different paragraphs
-        // are not accidentally merged.
+        const struck = [];
+        const inserted = [];
+
         for (const para of xmlDoc.getElementsByTagNameNS(WNS, "p")) {
-          let buffer = [];
+          // ── Strikethrough: consecutive struck runs within this paragraph ──
+          let strikeBuffer = [];
           for (const run of para.getElementsByTagNameNS(WNS, "r")) {
             const tEl = run.getElementsByTagNameNS(WNS, "t")[0];
             const text = tEl ? tEl.textContent : "";
             if (hasStrike(run) && text) {
-              buffer.push(text);
-            } else if (buffer.length) {
-              const combined = buffer.join("").trim();
-              if (combined.length > 3) results.push(combined);
-              buffer = [];
+              strikeBuffer.push(text);
+            } else if (strikeBuffer.length) {
+              const combined = strikeBuffer.join("").trim();
+              if (combined.length > 3) struck.push(combined);
+              strikeBuffer = [];
             }
           }
-          if (buffer.length) {
-            const combined = buffer.join("").trim();
-            if (combined.length > 3) results.push(combined);
+          if (strikeBuffer.length) {
+            const combined = strikeBuffer.join("").trim();
+            if (combined.length > 3) struck.push(combined);
+          }
+
+          // ── Tracked insertions: <w:ins> children of this paragraph ──────
+          for (const ins of para.getElementsByTagNameNS(WNS, "ins")) {
+            const texts = [];
+            for (const run of ins.getElementsByTagNameNS(WNS, "r")) {
+              const tEl = run.getElementsByTagNameNS(WNS, "t")[0];
+              if (tEl && tEl.textContent) texts.push(tEl.textContent);
+            }
+            const combined = texts.join("").trim();
+            if (combined.length > 3) inserted.push({ text: combined, color: "tracked" });
           }
         }
 
-        resolve([...new Set(results)]);
+        resolve({ struck: [...new Set(struck)], inserted });
       } catch(e) {
-        console.warn("Strikethrough detection:", e.message);
-        resolve([]);
+        console.warn("OOXML changes detection:", e.message);
+        resolve({ struck: [], inserted: [] });
       }
-    }).catch(() => resolve([]));
+    }).catch(() => resolve({ struck: [], inserted: [] }));
   });
 }
 
@@ -1078,10 +1091,12 @@ function getColoredTexts() {
         // font.color as "auto" but retains explicit underline — underline catches that case.
         const isAdded = (color, underline) => {
           const c = (color || "").replace("#","").toLowerCase();
-          const colored = c !== "" && c !== "auto" && c !== "000000" && c !== "ffffff";
-          const underlined = underline && underline.toLowerCase() !== "none"
-            && c !== "000000" && c !== "auto" && c !== "";
-          return colored || underlined;
+          // Explicit non-black, non-auto color
+          if (c !== "" && c !== "auto" && c !== "000000" && c !== "ffffff") return true;
+          // Underlined + not plain black — catches TC-styled red+underline where
+          // color reports as "auto" because the style applies the color, not inline formatting
+          if (underline && underline.toLowerCase() !== "none" && c !== "000000") return true;
+          return false;
         };
 
         const results = [];
@@ -1134,26 +1149,6 @@ function getColoredTexts() {
   });
 }
 
-// ── Extract tracked-change insertions (Word "Accept/Reject Changes" additions) ─
-function getTrackedInsertions() {
-  return new Promise(resolve => {
-    Word.run(async context => {
-      try {
-        const changes = context.document.body.getTrackedChanges();
-        changes.load("items/type,items/text");
-        await context.sync();
-        const results = changes.items
-          .filter(c => (c.type || "").toLowerCase().includes("insert"))
-          .map(c => ({ text: (c.text || "").trim(), color: "tracked change" }))
-          .filter(c => c.text.length > 3);
-        resolve(results);
-      } catch(e) {
-        console.warn("Tracked insertions:", e.message);
-        resolve([]);
-      }
-    }).catch(() => resolve([]));
-  });
-}
 
 // ── Read all comments from the document ───────────────────────────────────────
 function getDocumentComments() {
