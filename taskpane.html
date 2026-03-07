@@ -319,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260306-Y</span>
+        <span style="font-size:9px;color:#6b7280;">v20260306-Z</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -333,8 +333,8 @@
   <div id="view-reviewing" style="display:none">
     <div class="card" style="text-align:center;padding:28px;">
       <img class="spinner" src="gavel_red_transparent.gif" alt="" style="width:80px;height:80px;margin:0 auto 12px;display:block;">
-      <div style="font-weight:600;margin-bottom:6px;color:#ffffff;">Analyzing Document</div>
-      <div id="review-step" class="text-muted text-xs">Reading document text…</div>
+      <div id="review-phrase" style="font-weight:600;margin-bottom:6px;color:#ffffff;">…</div>
+      <div id="review-step" class="text-muted text-xs"></div>
       <button class="btn btn-secondary btn-sm" style="margin-top:16px;" onclick="cancelReview()">Cancel</button>
     </div>
   </div>
@@ -777,8 +777,9 @@ const _loadingPhrases = [
 let _phraseTimer = null;
 function randPhrase() { return _loadingPhrases[Math.floor(Math.random() * _loadingPhrases.length)]; }
 function startPhraseCycle() {
-  setStep(randPhrase());
-  _phraseTimer = setInterval(() => setStep(randPhrase()), 2800);
+  const el = document.getElementById("review-phrase");
+  if (el) el.textContent = randPhrase();
+  _phraseTimer = setInterval(() => { const e = document.getElementById("review-phrase"); if (e) e.textContent = randPhrase(); }, 2800);
 }
 function stopPhraseCycle() {
   if (_phraseTimer) { clearInterval(_phraseTimer); _phraseTimer = null; }
@@ -789,6 +790,7 @@ function setStep(msg) {
   const el = document.getElementById("review-step");
   if (el) el.textContent = msg;
 }
+
 function resetToIdle() { show("view-idle"); }
 let _reviewCancelled = false;
 function cancelReview() { _reviewCancelled = true; show("view-idle"); }
