@@ -319,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260306-X</span>
+        <span style="font-size:9px;color:#6b7280;">v20260306-Y</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -748,6 +748,42 @@ function show(id) {
     document.getElementById(v).style.display = v === id ? "block" : "none";
   });
 }
+const _loadingPhrases = [
+  "Dicing the onions…",
+  "Acquiring the bread…",
+  "Looking for Waldo…",
+  "Asking the lawyers…",
+  "Counting the red flags…",
+  "Sharpening the red pen…",
+  "Reading the fine print…",
+  "Consulting the oracle…",
+  "Waking up the interns…",
+  "Untangling the legalese…",
+  "Checking under the couch…",
+  "Brewing the coffee…",
+  "Translating from corporate…",
+  "Inspecting the clauses…",
+  "Sniffing out the nonsense…",
+  "Calling a friend…",
+  "Following the money…",
+  "Negotiating with the fridge…",
+  "Reviewing exhibit A through Z…",
+  "Convincing counsel to respond…",
+  "Speed-reading 47 pages…",
+  "Decoding the boilerplate…",
+  "Filing under 'sus'…",
+  "Putting on reading glasses…",
+];
+let _phraseTimer = null;
+function randPhrase() { return _loadingPhrases[Math.floor(Math.random() * _loadingPhrases.length)]; }
+function startPhraseCycle() {
+  setStep(randPhrase());
+  _phraseTimer = setInterval(() => setStep(randPhrase()), 2800);
+}
+function stopPhraseCycle() {
+  if (_phraseTimer) { clearInterval(_phraseTimer); _phraseTimer = null; }
+}
+
 function setStep(msg) {
   document.getElementById("step-indicator").textContent = msg;
   const el = document.getElementById("review-step");
@@ -778,7 +814,7 @@ function renderPlaybookSummary() {
 async function startReview() {
   _reviewCancelled = false;
   show("view-reviewing");
-  setStep("Reading document text…");
+  startPhraseCycle();
 
   const withTimeout = (p, ms, fallback) => Promise.race([p, new Promise(r => setTimeout(() => r(fallback), ms))]);
 
@@ -789,7 +825,6 @@ async function startReview() {
 
   try {
     // 1. Extract document text, comments, and strikethrough in parallel
-    setStep("Reading document…");
     const [rawText, docComments, ooxmlChanges, coloredTexts] = await Promise.all([
       withTimeout(getDocumentText(),    6000, ""),
       withTimeout(getDocumentComments(),4000, []),
@@ -913,12 +948,14 @@ async function startReview() {
       autoApprovable: rejectCount === 0 && negotiateCount === 0,
     };
 
+    stopPhraseCycle();
     setStep("Done.");
     renderResults(result);
     show("view-results");
 
   } catch(e) {
     if (!_reviewCancelled) {
+      stopPhraseCycle();
       setStep("Error: " + e.message);
       await new Promise(r => setTimeout(r, 4000));
       show("view-idle");
