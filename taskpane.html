@@ -326,7 +326,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260307-E</span>
+        <span style="font-size:9px;color:#6b7280;">v20260307-F</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -2085,53 +2085,44 @@ function cardClick(event, idx) {
   const gen = ++_navGen;
 
   if (c._isComment && c._commentIdx != null) {
-    // For comments: navigate via comment.getRange() — exact, no text-search ambiguity
     Word.run(async (context) => {
-      if (gen !== _navGen) return;
       const coll = context.document.body.getComments();
       coll.load("items");
       await context.sync();
-      if (gen !== _navGen) return;
       const comment = coll.items[c._commentIdx];
       if (!comment) return;
       const range = comment.getRange();
       range.load("text");
       await context.sync();
-      if (gen !== _navGen) return;
       range.select();
       await context.sync();
-    }).catch(() => {});
+    }).catch(e => console.warn("Comment nav failed:", e.message));
     return;
   }
 
-  // For added/removed language: search for the found text
   const searchText = c.found || "";
   if (!searchText.trim()) return;
 
   Word.run(async (context) => {
-    if (gen !== _navGen) return;
     const range = await findClauseRange(context, searchText);
-    if (gen !== _navGen || !range) return;
+    if (!range) return;
     range.select();
     await context.sync();
-  }).catch(() => {});
+  }).catch(e => console.warn("Clause nav failed:", e.message));
 }
 
 function navigateToClause(idx) {
-  const gen = ++_navGen;
   const clause = reviewClauses[idx];
   const foundText = (clause && (clause._isComment ? clause._commentAnchor : clause.found)) || "";
   if (!foundText) return;
 
-  // Highlight active card immediately
   document.querySelectorAll(".clause-card").forEach(el => el.classList.remove("nav-active"));
   const card = document.getElementById("clause-" + idx);
   if (card) card.classList.add("nav-active");
 
   Word.run(async (context) => {
-    if (gen !== _navGen) return; // Superseded by a newer click
     const range = await findClauseRange(context, foundText);
-    if (gen !== _navGen || !range) return;
+    if (!range) return;
     range.select();
     await context.sync();
   }).catch(e => console.warn("Could not navigate:", e.message));
