@@ -326,7 +326,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260307-B</span>
+        <span style="font-size:9px;color:#6b7280;">v20260307-C</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -340,7 +340,7 @@
   <div id="view-reviewing" style="display:none">
     <div class="card" style="text-align:center;padding:28px;">
       <img class="spinner" src="gavel_red_transparent.gif" alt="" style="width:80px;height:80px;margin:0 auto 12px;display:block;">
-      <div id="review-phrase" style="font-weight:600;margin-bottom:6px;color:#ffffff;">…</div>
+      <div id="review-phrase" style="font-weight:600;margin-bottom:6px;color:#ffffff;"></div>
       <div id="review-step" class="text-muted text-xs"></div>
       <button class="btn btn-secondary btn-sm" style="margin-top:16px;" onclick="cancelReview()">Cancel</button>
     </div>
@@ -786,6 +786,8 @@ function startPhraseCycle() {
   if (!el) return;
   el.textContent = _loadingPhrases[Math.floor(Math.random() * _loadingPhrases.length)];
   el.classList.add("glowing");
+  const step = document.getElementById("review-step");
+  if (step) step.textContent = "";
 }
 function stopPhraseCycle() {
   const el = document.getElementById("review-phrase");
@@ -822,8 +824,8 @@ function renderPlaybookSummary() {
 // ── Review flow ───────────────────────────────────────────────────────────────
 async function startReview() {
   _reviewCancelled = false;
-  show("view-reviewing");
   startPhraseCycle();
+  show("view-reviewing");
 
   const withTimeout = (p, ms, fallback) => Promise.race([p, new Promise(r => setTimeout(() => r(fallback), ms))]);
 
