@@ -319,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260306-U</span>
+        <span style="font-size:9px;color:#6b7280;">v20260306-V</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1331,8 +1331,15 @@ function renderClauses() {
         <span class="found-expand-btn" id="expand-btn-${i}" onclick="event.stopPropagation();toggleFoundText(${i})">More</span>
       </div>
       ` : ""}
-      ${c.deviationFromTemplate?`<div style="font-size:11px;color:#d97706;margin-bottom:4px;">⚠ ${safeStr(c.deviationFromTemplate).slice(0,100)}</div>`:""}
-      <div style="font-size:11px;color:#cccccc;line-height:1.5;margin-bottom:6px;">${safeStr(c.reasoning).slice(0,150)}</div>
+      ${c.deviationFromTemplate?`
+        <div style="font-size:11px;color:#d97706;margin-bottom:4px;position:relative;">
+          <span id="dev-text-${i}" class="found-text-clamped" style="color:#d97706;">⚠ ${escHtml(safeStr(c.deviationFromTemplate))}</span>
+          <span class="found-expand-btn" id="dev-btn-${i}" onclick="event.stopPropagation();toggleDevText(${i})">More</span>
+        </div>`:""}
+      <div style="font-size:11px;color:#cccccc;line-height:1.5;margin-bottom:6px;position:relative;">
+        <span id="reason-text-${i}" class="found-text-clamped" style="color:#cccccc;">${escHtml(safeStr(c.reasoning))}</span>
+        <span class="found-expand-btn" id="reason-btn-${i}" onclick="event.stopPropagation();toggleReasonText(${i})">More</span>
+      </div>
       ${c.suggestedLanguage?`
         <div style="font-size:11px;color:#cccccc;background:rgba(255,255,255,0.03);padding:7px;margin-bottom:6px;line-height:1.4;border:1px solid rgba(255,255,255,0.15);border-left:2px solid rgba(224,32,32,0.7);">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
@@ -1362,13 +1369,16 @@ function renderClauses() {
 
 function initFoundExpanders() {
   reviewClauses.forEach((_, i) => {
-    const el = document.getElementById("found-text-" + i);
-    const btn = document.getElementById("expand-btn-" + i);
-    if (el && btn) btn.style.display = el.scrollHeight > el.clientHeight + 2 ? "block" : "none";
-
-    const sel = document.getElementById("sugg-text-" + i);
-    const sbtn = document.getElementById("sugg-btn-" + i);
-    if (sel && sbtn) sbtn.style.display = sel.scrollHeight > sel.clientHeight + 2 ? "block" : "none";
+    [
+      ["found-text-", "expand-btn-"],
+      ["sugg-text-",  "sugg-btn-"],
+      ["dev-text-",   "dev-btn-"],
+      ["reason-text-","reason-btn-"],
+    ].forEach(([elId, btnId]) => {
+      const el  = document.getElementById(elId  + i);
+      const btn = document.getElementById(btnId + i);
+      if (el && btn) btn.style.display = el.scrollHeight > el.clientHeight + 2 ? "block" : "none";
+    });
   });
 }
 
@@ -1408,6 +1418,26 @@ async function rephraseSuggestion(idx) {
     return;
   }
   if (btn) { btn.disabled = false; btn.textContent = "↺ Rephrase"; }
+}
+
+function toggleDevText(i) {
+  const el = document.getElementById("dev-text-" + i);
+  const btn = document.getElementById("dev-btn-" + i);
+  if (!el || !btn) return;
+  const expanded = !el.classList.contains("found-text-clamped");
+  el.classList.toggle("found-text-clamped", expanded);
+  btn.style.display = "block";
+  btn.textContent = expanded ? "More" : "Less";
+}
+
+function toggleReasonText(i) {
+  const el = document.getElementById("reason-text-" + i);
+  const btn = document.getElementById("reason-btn-" + i);
+  if (!el || !btn) return;
+  const expanded = !el.classList.contains("found-text-clamped");
+  el.classList.toggle("found-text-clamped", expanded);
+  btn.style.display = "block";
+  btn.textContent = expanded ? "More" : "Less";
 }
 
 function toggleFoundText(i) {
