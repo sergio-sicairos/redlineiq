@@ -319,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260306-N</span>
+        <span style="font-size:9px;color:#6b7280;">v20260306-O</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1030,17 +1030,44 @@ function getOoxmlChanges() {
           });
         };
 
+        // Returns true if run has an explicit non-black, non-auto color
+        const hasExplicitColor = (run) => {
+          const rPr = run.getElementsByTagNameNS(WNS, "rPr")[0];
+          if (!rPr) return false;
+          const colorEl = rPr.getElementsByTagNameNS(WNS, "color")[0];
+          if (!colorEl) return false;
+          const val = (colorEl.getAttribute("w:val") || colorEl.getAttributeNS(WNS, "val") || "").toLowerCase();
+          return val && val !== "auto" && val !== "000000" && val !== "ffffff";
+        };
+
         const struck = [];
         const inserted = [];
 
         for (const para of xmlDoc.getElementsByTagNameNS(WNS, "p")) {
-          // ── Strikethrough: consecutive struck runs within this paragraph ──
+          // ── Strikethrough runs ───────────────────────────────────────────
+          // Red (colored) strikethrough = Added Language (counterparty's markup)
+          // Plain/black strikethrough   = Removed Language
+          // TC deletions (<w:delText>)  = Removed Language
           let strikeBuffer = [];
           for (const run of para.getElementsByTagNameNS(WNS, "r")) {
-            const tEl = run.getElementsByTagNameNS(WNS, "t")[0];
+            // Support both regular <w:t> and TC deletion <w:delText>
+            const tEl = run.getElementsByTagNameNS(WNS, "t")[0]
+                      || run.getElementsByTagNameNS(WNS, "delText")[0];
             const text = tEl ? tEl.textContent : "";
-            if (hasStrike(run) && text) {
-              strikeBuffer.push(text);
+            const isDelText = !!run.getElementsByTagNameNS(WNS, "delText")[0];
+
+            if ((hasStrike(run) || isDelText) && text) {
+              // Colored + manual strikethrough → Added Language
+              if (hasExplicitColor(run) && !isDelText) {
+                if (strikeBuffer.length) {
+                  const combined = strikeBuffer.join("").trim();
+                  if (combined.length > 3) struck.push(combined);
+                  strikeBuffer = [];
+                }
+                if (text.trim().length > 3) inserted.push({ text: text.trim(), color: "colored-strike" });
+              } else {
+                strikeBuffer.push(text);
+              }
             } else if (strikeBuffer.length) {
               const combined = strikeBuffer.join("").trim();
               if (combined.length > 3) struck.push(combined);
