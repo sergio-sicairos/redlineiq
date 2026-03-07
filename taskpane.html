@@ -326,7 +326,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260307-D</span>
+        <span style="font-size:9px;color:#6b7280;">v20260307-E</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1568,8 +1568,8 @@ async function applyDecisionToDoc(idx, decision) {
     return;
   }
 
-  // For comment cards with a counter: reply to the existing comment, don't insert a new one
-  if (clause._isComment && clause._commentIdx != null && decision === "negotiate") {
+  // Comment cards: reply to the thread for negotiate and reject
+  if (clause._isComment && clause._commentIdx != null && (decision === "negotiate" || decision === "reject")) {
     try {
       await Word.run(async (context) => {
         const coll = context.document.body.getComments();
@@ -1577,7 +1577,7 @@ async function applyDecisionToDoc(idx, decision) {
         await context.sync();
         const comment = coll.items[clause._commentIdx];
         if (!comment) return;
-        const replyText = clause.suggestedLanguage || "↔ Counter proposed — see playbook for suggested language.";
+        const replyText = clause.suggestedLanguage || (decision === "reject" ? "✕ Rejected" : "↔ Counter proposed — see playbook for suggested language.");
         comment.reply(replyText);
         await context.sync();
       });
@@ -1603,10 +1603,8 @@ async function applyDecisionToDoc(idx, decision) {
 
       } else if (decision === "reject") {
         range.font.strikeThrough = true;
-        const reason = clause.reasoning
-          ? "✕ Rejected: " + clause.reasoning
-          : "✕ Rejected";
-        range.insertComment(reason);
+        const rejectText = clause.suggestedLanguage || clause.reasoning || "✕ Rejected";
+        range.insertComment(rejectText);
 
       } else if (decision === "flag") {
         const note = clause.reasoning
