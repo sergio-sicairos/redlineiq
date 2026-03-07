@@ -319,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260306-W</span>
+        <span style="font-size:9px;color:#6b7280;">v20260306-X</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1482,6 +1482,44 @@ async function applyDecisionToDoc(idx, decision) {
   const clause = reviewClauses[idx];
   if (!clause) return;
 
+  // Comment + accept → resolve the thread
+  if (clause._isComment && clause._commentIdx != null && decision === "accept") {
+    try {
+      await Word.run(async (context) => {
+        const coll = context.document.body.getComments();
+        coll.load("items");
+        await context.sync();
+        const comment = coll.items[clause._commentIdx];
+        if (!comment) return;
+        comment.resolved = true;
+        await context.sync();
+      });
+    } catch(e) {
+      alert("Could not resolve thread: " + (e.message || e));
+    }
+    return;
+  }
+
+  // Added/Removed Language + accept → accept the tracked change, no comment
+  if (!clause._isComment && decision === "accept") {
+    try {
+      await Word.run(async (context) => {
+        const changes = context.document.body.getTrackedChanges();
+        changes.load("items/text");
+        await context.sync();
+        const needle = (clause.found || "").trim().slice(0, 100).toLowerCase();
+        for (const change of changes.items) {
+          const t = (change.text || "").trim().toLowerCase();
+          if (t.length > 3 && needle.includes(t.slice(0, 60))) {
+            change.accept();
+          }
+        }
+        await context.sync();
+      });
+    } catch(e) { /* tracked changes API unavailable — accept recorded in UI only */ }
+    return;
+  }
+
   // For comment cards with a counter: reply to the existing comment, don't insert a new one
   if (clause._isComment && clause._commentIdx != null && decision === "negotiate") {
     try {
@@ -1513,10 +1551,7 @@ async function applyDecisionToDoc(idx, decision) {
       const range = await findClauseRange(context, foundText);
       if (!range) return;
 
-      if (decision === "accept") {
-        range.insertComment("✓ Accepted");
-
-      } else if (decision === "negotiate") {
+      if (decision === "negotiate") {
         const counter = clause.suggestedLanguage
           ? "↔ Counter Proposed:\n" + clause.suggestedLanguage
           : "↔ Counter proposed — see playbook for suggested language.";
