@@ -88,7 +88,7 @@
     }
     .found-box:hover { background:rgba(59,130,246,0.08); border-color:rgba(59,130,246,0.35); }
     .found-text-clamped { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
-    .found-expand-btn { font-size:10px; color:#e02020; cursor:pointer; display:none; margin-top:3px; margin-bottom:4px; }
+    .found-expand-btn { font-size:14px; line-height:1; color:#555; cursor:pointer; display:none; position:absolute; right:0; top:0; padding:0 2px; user-select:none; }
     .clause-card.nav-active.accept    { outline:1px solid rgba(34,197,94,0.55);  box-shadow:0 0 12px rgba(34,197,94,0.1); }
     .clause-card.nav-active.negotiate { outline:1px solid rgba(234,179,8,0.55);  box-shadow:0 0 12px rgba(234,179,8,0.1); }
     .clause-card.nav-active.reject    { outline:1px solid rgba(224,32,32,0.55);  box-shadow:0 0 12px rgba(224,32,32,0.1); }
@@ -321,7 +321,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260307-J</span>
+        <span style="font-size:9px;color:#6b7280;">v20260307-K</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1370,13 +1370,15 @@ function renderClauses() {
       ${(c._isComment ? (c._commentContent || c.found) : c.found) ? `
       <div class="found-box" onclick="event.stopPropagation();navigateToClause(${i})" title="Click to jump to this location in the document">
         <div style="font-size:10px;color:#555555;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Found</div>
-        <span id="found-text-${i}" class="found-text-clamped" style="font-size:11px;color:#cccccc;">${escHtml(safeStr(c._isComment ? (c._commentContent || c.found) : c.found))}</span>
-        <span class="found-expand-btn" id="expand-btn-${i}" onclick="event.stopPropagation();toggleFoundText(${i})">More</span>
+        <div style="position:relative;padding-right:16px;">
+          <span id="found-text-${i}" class="found-text-clamped" style="font-size:11px;color:#cccccc;">${escHtml(safeStr(c._isComment ? (c._commentContent || c.found) : c.found))}</span>
+          <span class="found-expand-btn" id="expand-btn-${i}" onclick="event.stopPropagation();toggleFoundText(${i})">+</span>
+        </div>
       </div>
       ` : ""}
-      <div style="font-size:11px;color:#cccccc;line-height:1.5;margin-bottom:6px;position:relative;">
+      <div style="font-size:11px;color:#cccccc;line-height:1.5;margin-bottom:6px;position:relative;padding-right:16px;">
         <span id="reason-text-${i}" class="found-text-clamped" style="color:#cccccc;">${escHtml(safeStr(c.reasoning))}</span>
-        <span class="found-expand-btn" id="reason-btn-${i}" onclick="event.stopPropagation();toggleReasonText(${i})">More</span>
+        <span class="found-expand-btn" id="reason-btn-${i}" onclick="event.stopPropagation();toggleReasonText(${i})">+</span>
       </div>
       ${c.suggestedLanguage?`
         <div style="font-size:11px;color:#cccccc;background:rgba(255,255,255,0.03);padding:7px;margin-bottom:6px;line-height:1.4;border:1px solid rgba(255,255,255,0.15);border-left:2px solid rgba(224,32,32,0.7);">
@@ -1384,8 +1386,10 @@ function renderClauses() {
             <strong style="color:#ffffff">Suggested:</strong>
             <button id="rephrase-btn-${i}" onclick="event.stopPropagation();rephraseSuggestion(${i})" style="font-size:9px;padding:2px 7px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.05);color:#888;cursor:pointer;font-family:inherit;letter-spacing:0.04em;">↺ Rephrase</button>
           </div>
-          <span id="sugg-text-${i}" class="found-text-clamped" style="font-size:11px;color:#cccccc;display:-webkit-box;">${escHtml(safeStr(c.suggestedLanguage))}</span>
-          <span class="found-expand-btn" id="sugg-btn-${i}" onclick="event.stopPropagation();toggleSuggText(${i})">More</span>
+          <div style="position:relative;padding-right:16px;">
+            <span id="sugg-text-${i}" class="found-text-clamped" style="font-size:11px;color:#cccccc;display:-webkit-box;">${escHtml(safeStr(c.suggestedLanguage))}</span>
+            <span class="found-expand-btn" id="sugg-btn-${i}" onclick="event.stopPropagation();toggleSuggText(${i})">+</span>
+          </div>
         </div>
       `:""}
       <div class="decision-btns">
@@ -1426,7 +1430,7 @@ function toggleSuggText(i) {
   const expanded = !el.classList.contains("found-text-clamped");
   el.classList.toggle("found-text-clamped", expanded);
   btn.style.display = "block";
-  btn.textContent = expanded ? "More" : "Less";
+  btn.textContent = expanded ? "+" : "−";
 }
 
 async function rephraseSuggestion(idx) {
@@ -1475,7 +1479,7 @@ function toggleReasonText(i) {
   const expanded = !el.classList.contains("found-text-clamped");
   el.classList.toggle("found-text-clamped", expanded);
   btn.style.display = "block";
-  btn.textContent = expanded ? "More" : "Less";
+  btn.textContent = expanded ? "+" : "−";
 }
 
 function toggleFoundText(i) {
@@ -1485,7 +1489,7 @@ function toggleFoundText(i) {
   const expanded = !el.classList.contains("found-text-clamped");
   el.classList.toggle("found-text-clamped", expanded);
   btn.style.display = "block";
-  btn.textContent = expanded ? "More" : "Less";
+  btn.textContent = expanded ? "+" : "−";
 }
 
 function setDecision(idx, decision) {
