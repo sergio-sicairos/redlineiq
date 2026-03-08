@@ -321,7 +321,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260307-M</span>
+        <span style="font-size:9px;color:#6b7280;">v20260307-N</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -980,8 +980,7 @@ async function reviewSingleItem(item, posCtx, docType) {
     ? `This text is being DELETED (strikethrough) by the counterparty. Evaluate whether removing it is acceptable TO US.
 - If this text is our standard/template language or favorable to us → "reject" (we want to keep it)
 - If this text is unfavorable to us and its removal benefits us → "accept"
-- If partially acceptable → "negotiate"; suggestedLanguage = revised language we'd accept
-- Genuinely ambiguous → "negotiate"`
+- If partially acceptable or ambiguous → "negotiate"; suggestedLanguage = the revised version of the text we would accept keeping (required — never leave empty when negotiating)`
     : item.type === "Added Language"
     ? `This text is being ADDED by the counterparty. Evaluate whether this addition is acceptable.
 - Text triggers a Hard Limit → "reject"
@@ -1006,6 +1005,7 @@ Never include company names in output — use "the counterparty", "the customer"
 "sectionRef" must be a section number (e.g. "8.3"), exhibit (e.g. "Exhibit A"), or schedule (e.g. "Schedule 1") — whatever heading precedes this text. Leave blank if not identifiable.
 "source" must be exactly one of: "Hard Limit" (violates a must-have position), "Standard Template" (deviates from our standard language), "Playbook Preference" (softer fallback position applies), "Rewording" (counterparty restating without substantive change), "Novel Language" (no playbook position covers this).
 "reasoning" must always be populated — cover what specifically deviates from our template/positions AND why you made this recommendation in one combined explanation. Never leave it empty.
+"suggestedLanguage" must always be populated when recommendation is "negotiate". Never leave it empty for a negotiate recommendation.
 Return JSON only: {"category":"","sectionRef":"","found":"","recommendation":"accept|negotiate|reject","reasoning":"","suggestedLanguage":"","source":""}`;
 
   const user = `Type: ${item.type}
