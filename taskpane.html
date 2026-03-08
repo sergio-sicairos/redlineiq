@@ -321,7 +321,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260307-G</span>
+        <span style="font-size:9px;color:#6b7280;">v20260307-H</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1438,12 +1438,20 @@ async function rephraseSuggestion(idx) {
   const btn = document.getElementById("rephrase-btn-" + idx);
   const el  = document.getElementById("sugg-text-"   + idx);
   if (btn) { btn.disabled = true; btn.textContent = "…"; }
+
+  c._rephraseCount = (c._rephraseCount || 0) + 1;
+  const level = c._rephraseCount;
+
+  const prompts = [
+    "Rewrite this contract clause to be shorter and plainer. Cut legal jargon and filler. Keep the core obligation. Return only the rewritten text.",
+    "Rewrite this even shorter and more casual. One or two sentences max. Drop any legalese completely. Return only the rewritten text.",
+    "Boil this down to the bare minimum — the single clearest sentence possible, in plain conversational language. Return only the rewritten text.",
+    "Make this as brutally short as you can without losing the meaning. One sentence, everyday words, zero fluff. Return only the rewritten text.",
+  ];
+  const prompt = prompts[Math.min(level - 1, prompts.length - 1)];
+
   try {
-    const result = await callClaude(
-      "Rewrite this contract clause to be as short and plain as possible. Use everyday language — no legal jargon, no passive voice, no filler. Cut every word that isn't essential. Keep the core obligation intact. Return only the rewritten text, nothing else.",
-      c.suggestedLanguage,
-      400
-    );
+    const result = await callClaude(prompt, c.suggestedLanguage, 300);
     c.suggestedLanguage = result.trim();
     if (el) {
       el.textContent = c.suggestedLanguage;
@@ -1455,6 +1463,7 @@ async function rephraseSuggestion(idx) {
     });
   } catch(e) {
     if (btn) btn.textContent = "Error";
+    c._rephraseCount--;
     return;
   }
   if (btn) { btn.disabled = false; btn.textContent = "↺ Rephrase"; }
