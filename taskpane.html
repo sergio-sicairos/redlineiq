@@ -80,7 +80,6 @@
     .clause-card.accept    { border-left-color:#22c55e; }
     .clause-card.negotiate { border-left-color:#eab308; }
     .clause-card.reject    { border-left-color:#e02020; }
-    .clause-card.flag      { border-left-color:#f97316; }
     .found-box {
       cursor:pointer; padding:6px 8px; margin-bottom:4px;
       border:1px solid rgba(255,255,255,0.08); border-radius:3px;
@@ -93,7 +92,6 @@
     .clause-card.nav-active.accept    { outline:1px solid rgba(34,197,94,0.55);  box-shadow:0 0 12px rgba(34,197,94,0.1); }
     .clause-card.nav-active.negotiate { outline:1px solid rgba(234,179,8,0.55);  box-shadow:0 0 12px rgba(234,179,8,0.1); }
     .clause-card.nav-active.reject    { outline:1px solid rgba(224,32,32,0.55);  box-shadow:0 0 12px rgba(224,32,32,0.1); }
-    .clause-card.nav-active.flag      { outline:1px solid rgba(249,115,22,0.55); box-shadow:0 0 12px rgba(249,115,22,0.1); }
     .clause-card.nav-active .found-box { background:rgba(59,130,246,0.1); border-color:rgba(59,130,246,0.45); }
     .decision-btns { display:flex; gap:4px; flex-wrap:wrap; margin-top:8px; }
     .decision-btn {
@@ -107,15 +105,12 @@
     .decision-btn.btn-accept    { color:#22c55e; border-color:rgba(34,197,94,0.3); background:rgba(34,197,94,0.05); }
     .decision-btn.btn-negotiate { color:#eab308; border-color:rgba(234,179,8,0.3); background:rgba(234,179,8,0.05); }
     .decision-btn.btn-reject    { color:#e02020; border-color:rgba(224,32,32,0.3); background:rgba(224,32,32,0.05); }
-    .decision-btn.btn-flag      { color:#f97316; border-color:rgba(249,115,22,0.3); background:rgba(249,115,22,0.05); }
     .decision-btn.btn-accept:hover    { background:rgba(34,197,94,0.15);  border-color:rgba(34,197,94,0.8);  color:#4ade80; box-shadow:0 0 10px rgba(34,197,94,0.2); }
     .decision-btn.btn-negotiate:hover { background:rgba(234,179,8,0.15);  border-color:rgba(234,179,8,0.8);  color:#facc15; box-shadow:0 0 10px rgba(234,179,8,0.2); }
     .decision-btn.btn-reject:hover    { background:rgba(224,32,32,0.15);  border-color:rgba(224,32,32,0.8);  color:#ff4444; box-shadow:0 0 10px rgba(224,32,32,0.2); }
-    .decision-btn.btn-flag:hover      { background:rgba(249,115,22,0.15); border-color:rgba(249,115,22,0.8); color:#fb923c; box-shadow:0 0 10px rgba(249,115,22,0.2); }
     .decision-btn.active-accept    { border-color:#22c55e; background:rgba(34,197,94,0.15);  color:#4ade80;  box-shadow:0 0 10px rgba(34,197,94,0.2); }
     .decision-btn.active-negotiate { border-color:#eab308; background:rgba(234,179,8,0.15);  color:#facc15; box-shadow:0 0 10px rgba(234,179,8,0.2); }
     .decision-btn.active-reject    { border-color:#e02020; background:rgba(224,32,32,0.15);  color:#ff4444;  box-shadow:0 0 10px rgba(224,32,32,0.2); }
-    .decision-btn.active-flag      { border-color:#f97316; background:rgba(249,115,22,0.15); color:#fb923c; box-shadow:0 0 10px rgba(249,115,22,0.2); }
     .insert-btn {
       margin-top:6px; padding:4px 9px; font-size:11px; font-weight:600; cursor:pointer;
       border:1px solid rgba(255,255,255,0.08);
@@ -326,7 +321,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260307-F</span>
+        <span style="font-size:9px;color:#6b7280;">v20260307-G</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -950,7 +945,7 @@ async function startReview() {
     const recs = clauses.map(c => c.recommendation);
     const rejectCount = recs.filter(r => r === "reject").length;
     const negotiateCount = recs.filter(r => r === "negotiate").length;
-    const overallRisk = rejectCount > 0 ? "high" : negotiateCount > 0 ? "medium" : recs.includes("flag") ? "medium" : "low";
+    const overallRisk = rejectCount > 0 ? "high" : negotiateCount > 0 ? "medium" : "low";
     const result = {
       overallRisk,
       summary: `Reviewed ${items.length} change${items.length !== 1 ? "s" : ""} (${docComments.length} comment${docComments.length !== 1 ? "s" : ""}, ${allAdded.length} addition${allAdded.length !== 1 ? "s" : ""}, ${struckTexts.length} removal${struckTexts.length !== 1 ? "s" : ""}). ${rejectCount} reject, ${negotiateCount} negotiate recommended.`,
@@ -984,21 +979,19 @@ async function reviewSingleItem(item, posCtx, docType) {
 - If this text is our standard/template language or favorable to us → "reject" (we want to keep it)
 - If this text is unfavorable to us and its removal benefits us → "accept"
 - If partially acceptable → "negotiate"; suggestedLanguage = revised language we'd accept
-- Genuinely ambiguous → "flag"`
+- Genuinely ambiguous → "negotiate"`
     : item.type === "Added Language"
     ? `This text is being ADDED by the counterparty. Evaluate whether this addition is acceptable.
 - Text triggers a Hard Limit → "reject"
 - Text outside Standard but Fallback covers it → "negotiate"; suggestedLanguage = our Standard
 - Text worse than Fallback → "reject"
 - Text within Standard or favorable to us → "accept"
-- No position for this category → judge severity: minor = "accept", material = "negotiate", egregious = "reject"
-- Genuinely ambiguous → "flag"`
+- No position for this category → judge severity: minor = "accept", material = "negotiate", egregious = "reject"`
     : /* Comment */
     `A reviewer has flagged a concern via this comment. Evaluate the underlying issue in the contract.
 - If it flags a Hard Limit violation → "reject"
 - If it flags something negotiable → "negotiate"
-- If the concern is minor or already acceptable → "accept"
-- If more context is needed → "flag"`;
+- If the concern is minor or already acceptable → "accept"`;
 
   const sys = `You are a contract clause reviewer for ${docType} agreements.
 
@@ -1010,12 +1003,12 @@ ${decisionLogic}
 Never include company names in output — use "the counterparty", "the customer", "the vendor".
 "sectionRef" must be a section number (e.g. "8.3"), exhibit (e.g. "Exhibit A"), or schedule (e.g. "Schedule 1") — whatever heading precedes this text. Leave blank if not identifiable.
 "source" must be exactly one of: "Hard Limit" (violates a must-have position), "Standard Template" (deviates from our standard language), "Playbook Preference" (softer fallback position applies), "Rewording" (counterparty restating without substantive change), "Novel Language" (no playbook position covers this).
-Return JSON only: {"category":"","sectionRef":"","found":"","deviationFromTemplate":"","recommendation":"accept|negotiate|reject|flag","reasoning":"","suggestedLanguage":"","source":""}`;
+Return JSON only: {"category":"","sectionRef":"","found":"","deviationFromTemplate":"","recommendation":"accept|negotiate|reject","reasoning":"","suggestedLanguage":"","source":""}`;
 
   const user = `Type: ${item.type}
 ${item._docContext ? `Preceding document text (use for section number context):\n"${item._docContext}"\n` : ""}${item.anchor ? `Anchored to contract text: "${item.anchor.slice(0, 200)}"\n` : ""}${item.author ? `By: ${item.author}\n` : ""}Text to review: "${item.text.slice(0, 600)}"`;
 
-  const fallback = { category: item.type, found: item.text.slice(0,300), recommendation: "flag", reasoning: "", sectionRef: "", suggestedLanguage: "", deviationFromTemplate: "", source: "" };
+  const fallback = { category: item.type, found: item.text.slice(0,300), recommendation: "negotiate", reasoning: "", sectionRef: "", suggestedLanguage: "", deviationFromTemplate: "", source: "" };
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const raw = await callClaude(sys, user, 800);
@@ -1367,8 +1360,7 @@ function renderClauses() {
             accept:    'background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)',
             negotiate: 'background:rgba(234,179,8,0.1);color:#eab308;border:1px solid rgba(234,179,8,0.4)',
             reject:    'background:rgba(224,32,32,0.1);color:#e02020;border:1px solid rgba(224,32,32,0.4)',
-            flag:      'background:rgba(249,115,22,0.1);color:#f97316;border:1px solid rgba(249,115,22,0.4)',
-          }[c.recommendation] || 'background:rgba(255,255,255,0.03);color:#888888;border:1px solid rgba(255,255,255,0.15)'}">${{accept:"Accept",negotiate:"Counter",reject:"Reject",flag:"Flag"}[c.recommendation]||safeStr(c.recommendation)}</span>
+          }[c.recommendation] || 'background:rgba(255,255,255,0.03);color:#888888;border:1px solid rgba(255,255,255,0.15)'}">${{accept:"Accept",negotiate:"Counter",reject:"Reject"}[c.recommendation]||safeStr(c.recommendation)}</span>
           ${safeStr(c.source) ? `<span class="info-icon" onclick="event.stopPropagation()">i<span class="info-tip">${escHtml(safeStr(c.source))}</span></span>` : ""}
         </span>
       </div>
@@ -1399,9 +1391,9 @@ function renderClauses() {
         </div>
       `:""}
       <div class="decision-btns">
-        ${["accept","negotiate","reject","flag"].map(d=>`
+        ${["accept","negotiate","reject"].map(d=>`
           <button class="decision-btn btn-${d} ${dec===d?`active-${d}`:""}"
-            onclick="setDecision(${i},'${d}')">${{accept:"✓ Accept",negotiate:"↔ Counter",reject:"✕ Reject",flag:"⚑ Flag"}[d]}</button>
+            onclick="setDecision(${i},'${d}')">${{accept:"✓ Accept",negotiate:"↔ Counter",reject:"✕ Reject"}[d]}</button>
         `).join("")}
       </div>
       ${c.userDecision && !c.applied ? `
@@ -1606,11 +1598,6 @@ async function applyDecisionToDoc(idx, decision) {
         const rejectText = clause.suggestedLanguage || clause.reasoning || "✕ Rejected";
         range.insertComment(rejectText);
 
-      } else if (decision === "flag") {
-        const note = clause.reasoning
-          ? "⚑ Flagged for review: " + clause.reasoning
-          : "⚑ Flagged for review";
-        range.insertComment(note);
       }
 
       await context.sync();
