@@ -321,7 +321,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260307-I</span>
+        <span style="font-size:9px;color:#6b7280;">v20260307-J</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -909,7 +909,7 @@ async function startReview() {
           _commentIdx: item._commentIdx ?? null,
           category: "", found: item.text, recommendation: "negotiate",
           reasoning: "", sectionRef: item._preSection || "",
-          suggestedLanguage: "", deviationFromTemplate: "", source: ""
+          suggestedLanguage: "", source: ""
         };
         // Always use full original text as found (not AI's truncated version)
         clause.found = item.text;
@@ -1005,12 +1005,13 @@ ${decisionLogic}
 Never include company names in output — use "the counterparty", "the customer", "the vendor".
 "sectionRef" must be a section number (e.g. "8.3"), exhibit (e.g. "Exhibit A"), or schedule (e.g. "Schedule 1") — whatever heading precedes this text. Leave blank if not identifiable.
 "source" must be exactly one of: "Hard Limit" (violates a must-have position), "Standard Template" (deviates from our standard language), "Playbook Preference" (softer fallback position applies), "Rewording" (counterparty restating without substantive change), "Novel Language" (no playbook position covers this).
-Return JSON only: {"category":"","sectionRef":"","found":"","deviationFromTemplate":"","recommendation":"accept|negotiate|reject","reasoning":"","suggestedLanguage":"","source":""}`;
+"reasoning" must cover both what specifically deviates from our template/positions AND why you made this recommendation — one combined explanation.
+Return JSON only: {"category":"","sectionRef":"","found":"","recommendation":"accept|negotiate|reject","reasoning":"","suggestedLanguage":"","source":""}`;
 
   const user = `Type: ${item.type}
 ${item._docContext ? `Preceding document text (use for section number context):\n"${item._docContext}"\n` : ""}${item.anchor ? `Anchored to contract text: "${item.anchor.slice(0, 200)}"\n` : ""}${item.author ? `By: ${item.author}\n` : ""}Text to review: "${item.text.slice(0, 600)}"`;
 
-  const fallback = { category: item.type, found: item.text.slice(0,300), recommendation: "negotiate", reasoning: "", sectionRef: "", suggestedLanguage: "", deviationFromTemplate: "", source: "" };
+  const fallback = { category: item.type, found: item.text.slice(0,300), recommendation: "negotiate", reasoning: "", sectionRef: "", suggestedLanguage: "", source: "" };
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const raw = await callClaude(sys, user, 800);
@@ -1373,11 +1374,6 @@ function renderClauses() {
         <span class="found-expand-btn" id="expand-btn-${i}" onclick="event.stopPropagation();toggleFoundText(${i})">More</span>
       </div>
       ` : ""}
-      ${c.deviationFromTemplate?`
-        <div style="font-size:11px;color:#d97706;margin-bottom:4px;position:relative;">
-          <span id="dev-text-${i}" class="found-text-clamped" style="color:#d97706;">⚠ ${escHtml(safeStr(c.deviationFromTemplate))}</span>
-          <span class="found-expand-btn" id="dev-btn-${i}" onclick="event.stopPropagation();toggleDevText(${i})">More</span>
-        </div>`:""}
       <div style="font-size:11px;color:#cccccc;line-height:1.5;margin-bottom:6px;position:relative;">
         <span id="reason-text-${i}" class="found-text-clamped" style="color:#cccccc;">${escHtml(safeStr(c.reasoning))}</span>
         <span class="found-expand-btn" id="reason-btn-${i}" onclick="event.stopPropagation();toggleReasonText(${i})">More</span>
@@ -1414,7 +1410,6 @@ function initFoundExpanders() {
     [
       ["found-text-", "expand-btn-"],
       ["sugg-text-",  "sugg-btn-"],
-      ["dev-text-",   "dev-btn-"],
       ["reason-text-","reason-btn-"],
     ].forEach(([elId, btnId]) => {
       const el  = document.getElementById(elId  + i);
@@ -1471,15 +1466,7 @@ async function rephraseSuggestion(idx) {
   if (btn) { btn.disabled = false; btn.textContent = "↺ Rephrase"; }
 }
 
-function toggleDevText(i) {
-  const el = document.getElementById("dev-text-" + i);
-  const btn = document.getElementById("dev-btn-" + i);
-  if (!el || !btn) return;
-  const expanded = !el.classList.contains("found-text-clamped");
-  el.classList.toggle("found-text-clamped", expanded);
-  btn.style.display = "block";
-  btn.textContent = expanded ? "More" : "Less";
-}
+
 
 function toggleReasonText(i) {
   const el = document.getElementById("reason-text-" + i);
