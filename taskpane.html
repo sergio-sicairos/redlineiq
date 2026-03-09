@@ -316,7 +316,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260307-W</span>
+        <span style="font-size:9px;color:#6b7280;">v20260307-X</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -2601,7 +2601,7 @@ async function _callClaudeChat(system, messages) {
 </script>
 
 <!-- ── Ask AI floating UI ─────────────────────────────────────────────────── -->
-<div id="ask-ai-panel" style="display:none;position:fixed;bottom:52px;right:12px;width:290px;height:380px;background:#111;border:1px solid rgba(255,255,255,0.15);border-radius:6px;flex-direction:column;z-index:1000;box-shadow:0 8px 32px rgba(0,0,0,0.6);">
+<div id="ask-ai-panel" style="display:none;position:fixed;bottom:52px;right:20px;width:290px;height:380px;background:#111;border:1px solid rgba(255,255,255,0.15);border-radius:6px;flex-direction:column;z-index:1000;box-shadow:0 8px 32px rgba(0,0,0,0.6);">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.08);">
     <span style="font-size:11px;font-weight:600;color:#fff;letter-spacing:0.05em;">ASK AI</span>
     <span onclick="toggleAskAI()" style="font-size:14px;color:#555;cursor:pointer;line-height:1;padding:0 2px;">✕</span>
@@ -2616,7 +2616,7 @@ async function _callClaudeChat(system, messages) {
   </div>
 </div>
 
-<button onclick="toggleAskAI()" style="position:fixed;bottom:12px;right:12px;padding:7px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,0.2);color:#ccc;font-size:11px;font-weight:600;cursor:pointer;border-radius:4px;letter-spacing:0.05em;z-index:1001;box-shadow:0 4px 16px rgba(0,0,0,0.5);">Ask AI</button>
+<button onclick="toggleAskAI()" style="position:fixed;bottom:12px;right:20px;padding:7px 12px;background:#7c3aed;border:1px solid rgba(167,139,250,0.4);color:#fff;font-size:11px;font-weight:600;cursor:pointer;border-radius:4px;letter-spacing:0.05em;z-index:1001;box-shadow:0 4px 16px rgba(124,58,237,0.4);">Ask AI</button>
 
 </body>
 </html>
