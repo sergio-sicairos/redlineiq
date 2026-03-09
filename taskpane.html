@@ -316,7 +316,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260307-U</span>
+        <span style="font-size:9px;color:#6b7280;">v20260307-V</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1011,6 +1011,7 @@ ${item._docContext ? `Preceding document text (use for section number context):\
     try {
       const raw = await callClaude(sys, user, 800);
       const parsed = repairJSON(raw);
+      if (!parsed) throw new Error("JSON parse failed");
       return parsed;
     } catch(e) {
       if (e.message.includes("Rate limited") && attempt === 0) {
@@ -1396,7 +1397,7 @@ function renderClauses() {
       <div style="margin-bottom:6px;">
         <div style="font-size:10px;color:#555555;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Analysis</div>
         <div style="font-size:11px;color:#cccccc;line-height:1.5;position:relative;padding-right:16px;">
-          <span id="reason-text-${i}" class="found-text-clamped" style="color:${c.reasoning?'#cccccc':'#444444'};">${escHtml(safeStr(c.reasoning) || "—")}</span>
+          <span id="reason-text-${i}" class="found-text-clamped" style="color:${c.reasoning?'#cccccc':'#666666'};">${escHtml(safeStr(c.reasoning) || "—")}</span>
           <span class="found-expand-btn" id="reason-btn-${i}" onclick="event.stopPropagation();toggleReasonText(${i})">+</span>
         </div>
       </div>
