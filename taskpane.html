@@ -220,8 +220,8 @@
     }
     .info-icon {
       position:relative; display:inline-flex; align-items:center; justify-content:center;
-      width:16px; height:16px; border-radius:50%; border:1px solid rgba(255,255,255,0.3);
-      font-size:10px; font-weight:700; color:rgba(255,255,255,0.4); cursor:default;
+      width:12px; height:12px; border-radius:50%; border:1px solid rgba(255,255,255,0.3);
+      font-size:8px; font-weight:700; color:rgba(255,255,255,0.4); cursor:default;
       flex-shrink:0; font-style:normal; line-height:1;
     }
     .info-icon:hover { border-color:#ffffff; color:#ffffff; }
@@ -321,7 +321,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260307-O</span>
+        <span style="font-size:9px;color:#6b7280;">v20260307-P</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1358,7 +1358,7 @@ function renderClauses() {
           "Added Language":   `<span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)">✏️ Added Language</span>`,
           "Removed Language": `<span class="badge" style="background:rgba(224,32,32,0.1);color:#e02020;border:1px solid rgba(224,32,32,0.4)">✂️ Removed Language</span>`,
         }[c._signalType] || `<span class="badge" style="background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.4)">${escHtml(safeStr(c._signalType||c.category))}</span>`}
-        <span style="margin-left:auto;display:flex;align-items:center;gap:6px;">
+        <span style="margin-left:auto;display:flex;align-items:center;gap:4px;">
           <span class="badge" style="${{
             accept:    'background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)',
             negotiate: 'background:rgba(234,179,8,0.1);color:#eab308;border:1px solid rgba(234,179,8,0.4)',
