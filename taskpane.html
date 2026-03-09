@@ -316,7 +316,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260307-T</span>
+        <span style="font-size:9px;color:#6b7280;">v20260307-U</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1450,12 +1450,14 @@ async function rephraseSuggestion(idx) {
 
   // Lock in original text on first rephrase so we can always reset to it
   if (!c._originalSuggestedLanguage) c._originalSuggestedLanguage = c.suggestedLanguage;
-  // Manual edit happened — reset to original and start over
+  // Manual edit happened — restore original and stop; next click will rephrase
   if (c._manualEdit) {
     c.suggestedLanguage = c._originalSuggestedLanguage;
     c._rephraseCount = 0;
     c._manualEdit = false;
-    if (el) el.textContent = c.suggestedLanguage;
+    if (el) { el.textContent = c.suggestedLanguage; el.style.color = "#cccccc"; }
+    if (btn) { btn.disabled = false; btn.textContent = "↺ Rephrase"; }
+    return;
   }
 
   c._rephraseCount = (c._rephraseCount || 0) + 1;
