@@ -71,15 +71,12 @@
       text-transform:uppercase; letter-spacing:0.08em; margin-bottom:8px;
     }
     .clause-card {
-      background:#111111; border:1px solid rgba(255,255,255,0.15);
+      background:#111111; border:1px solid rgba(255,255,255,0.12);
       padding:12px; margin-bottom:8px;
-      border-left: 3px solid #ffffff;
-      cursor:pointer; transition: background 0.15s;
+      border-left: 3px solid rgba(255,255,255,0.18);
+      cursor:pointer; transition: background 0.15s, border-color 0.15s;
     }
-    .clause-card:hover { background:#181818; }
-    .clause-card.accept    { border-left-color:#22c55e; }
-    .clause-card.negotiate { border-left-color:#eab308; }
-    .clause-card.reject    { border-left-color:#e02020; }
+    .clause-card:hover { background:#181818; border-color:rgba(255,255,255,0.25); border-left-color:rgba(255,255,255,0.35); }
     .found-box {
       cursor:pointer; padding:6px 8px; margin-bottom:4px;
       border:1px solid rgba(255,255,255,0.08); border-radius:3px;
@@ -89,10 +86,8 @@
     .found-box:hover { background:rgba(59,130,246,0.08); border-color:rgba(59,130,246,0.35); }
     .found-text-clamped { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
     .found-expand-btn { font-size:14px; line-height:1; color:#555; cursor:pointer; display:none; position:absolute; right:0; top:0; padding:0 2px; user-select:none; }
-    .clause-card.nav-active.accept    { outline:1px solid rgba(34,197,94,0.55);  box-shadow:0 0 12px rgba(34,197,94,0.1); }
-    .clause-card.nav-active.negotiate { outline:1px solid rgba(234,179,8,0.55);  box-shadow:0 0 12px rgba(234,179,8,0.1); }
-    .clause-card.nav-active.reject    { outline:1px solid rgba(224,32,32,0.55);  box-shadow:0 0 12px rgba(224,32,32,0.1); }
-    .clause-card.nav-active .found-box { background:rgba(59,130,246,0.1); border-color:rgba(59,130,246,0.45); }
+    .clause-card.nav-active { background:#1a1a1a; border-color:rgba(255,255,255,0.5); border-left-color:#ffffff; }
+    .clause-card.nav-active .found-box { background:rgba(255,255,255,0.05); border-color:rgba(255,255,255,0.2); }
     .decision-btns { display:flex; gap:4px; flex-wrap:wrap; margin-top:8px; }
     .decision-btn {
       display:inline-flex; align-items:center;
@@ -321,7 +316,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260307-Q</span>
+        <span style="font-size:9px;color:#6b7280;">v20260307-R</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
