@@ -316,7 +316,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260307-R</span>
+        <span style="font-size:9px;color:#6b7280;">v20260307-S</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1375,11 +1375,21 @@ function renderClauses() {
         <div style="font-size:11px;color:#cccccc;background:rgba(255,255,255,0.03);padding:7px;margin-bottom:6px;line-height:1.4;border:1px solid rgba(255,255,255,0.15);border-left:2px solid rgba(224,32,32,0.7);">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
             <strong style="color:#ffffff">Suggested:</strong>
-            <button id="rephrase-btn-${i}" onclick="event.stopPropagation();rephraseSuggestion(${i})" style="font-size:9px;padding:2px 7px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.05);color:#888;cursor:pointer;font-family:inherit;letter-spacing:0.04em;">↺ Rephrase</button>
+            <span style="display:flex;gap:4px;">
+              <button id="edit-btn-${i}" onclick="event.stopPropagation();editSuggestion(${i})" style="font-size:9px;padding:2px 7px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.05);color:#888;cursor:pointer;font-family:inherit;letter-spacing:0.04em;">✎ Edit</button>
+              <button id="rephrase-btn-${i}" onclick="event.stopPropagation();rephraseSuggestion(${i})" style="font-size:9px;padding:2px 7px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.05);color:#888;cursor:pointer;font-family:inherit;letter-spacing:0.04em;">↺ Rephrase</button>
+            </span>
           </div>
-          <div style="position:relative;padding-right:16px;">
+          <div id="sugg-view-${i}" style="position:relative;padding-right:16px;">
             <span id="sugg-text-${i}" class="found-text-clamped" style="font-size:11px;color:${c.suggestedLanguage?'#cccccc':'#444444'};display:-webkit-box;">${escHtml(safeStr(c.suggestedLanguage) || "—")}</span>
             <span class="found-expand-btn" id="sugg-btn-${i}" onclick="event.stopPropagation();toggleSuggText(${i})">+</span>
+          </div>
+          <div id="sugg-edit-${i}" style="display:none;">
+            <textarea id="sugg-ta-${i}" onclick="event.stopPropagation()" style="width:100%;box-sizing:border-box;background:#1a1a1a;border:1px solid rgba(255,255,255,0.25);color:#cccccc;font-size:11px;font-family:inherit;line-height:1.5;padding:5px;resize:vertical;min-height:80px;outline:none;"></textarea>
+            <div style="display:flex;gap:4px;margin-top:4px;">
+              <button onclick="event.stopPropagation();saveSuggestion(${i})" style="font-size:9px;padding:2px 10px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.1);color:#fff;cursor:pointer;font-family:inherit;">Save</button>
+              <button onclick="event.stopPropagation();cancelEditSuggestion(${i})" style="font-size:9px;padding:2px 10px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:#888;cursor:pointer;font-family:inherit;">Cancel</button>
+            </div>
           </div>
         </div>
       ` : ""}
@@ -1468,6 +1478,42 @@ async function rephraseSuggestion(idx) {
   if (btn) { btn.disabled = false; btn.textContent = "↺ Rephrase"; }
 }
 
+function editSuggestion(idx) {
+  const c = reviewClauses[idx];
+  if (!c) return;
+  const view = document.getElementById("sugg-view-" + idx);
+  const editArea = document.getElementById("sugg-edit-" + idx);
+  const ta = document.getElementById("sugg-ta-" + idx);
+  if (!view || !editArea || !ta) return;
+  ta.value = c.suggestedLanguage || "";
+  view.style.display = "none";
+  editArea.style.display = "block";
+  ta.focus();
+}
+
+function saveSuggestion(idx) {
+  const c = reviewClauses[idx];
+  if (!c) return;
+  const ta = document.getElementById("sugg-ta-" + idx);
+  const el = document.getElementById("sugg-text-" + idx);
+  const view = document.getElementById("sugg-view-" + idx);
+  const editArea = document.getElementById("sugg-edit-" + idx);
+  if (!ta || !el || !view || !editArea) return;
+  const newText = ta.value.trim();
+  c.suggestedLanguage = newText;
+  el.textContent = newText || "—";
+  el.style.color = newText ? "#cccccc" : "#444444";
+  editArea.style.display = "none";
+  view.style.display = "block";
+}
+
+function cancelEditSuggestion(idx) {
+  const view = document.getElementById("sugg-view-" + idx);
+  const editArea = document.getElementById("sugg-edit-" + idx);
+  if (!view || !editArea) return;
+  editArea.style.display = "none";
+  view.style.display = "block";
+}
 
 
 function toggleReasonText(i) {
