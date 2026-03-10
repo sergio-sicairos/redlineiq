@@ -319,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260308-K</span>
+        <span style="font-size:9px;color:#6b7280;">v20260308-L</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1380,24 +1380,31 @@ function renderClauses() {
       </div>
       ${(c._isComment ? (c._commentContent || c.found) : c.found) ? `
       <div class="found-box" onclick="event.stopPropagation();navigateToClause(${i})" title="Click to jump to this location in the document" style="margin-bottom:8px;">
-        <div style="font-size:10px;color:#60a5fa;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Found</div>
+        <div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Found</div>
         <div style="position:relative;padding-right:16px;">
-          <span id="found-text-${i}" class="found-text-clamped" style="font-size:11px;color:#d4d4d4;">${escHtml(safeStr(c._isComment ? (c._commentContent || c.found) : c.found))}</span>
+          <span id="found-text-${i}" class="found-text-clamped" style="font-size:11px;color:#cccccc;">${escHtml(safeStr(c._isComment ? (c._commentContent || c.found) : c.found))}</span>
           <span class="found-expand-btn" id="expand-btn-${i}" onclick="event.stopPropagation();toggleFoundText(${i})">+</span>
         </div>
       </div>
       ` : ""}
+      <div style="margin-bottom:8px;background:rgba(255,255,255,0.02);padding:7px 8px;border-radius:3px;border:1px solid rgba(255,255,255,0.06);">
+        <div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Analysis</div>
+        <div style="font-size:11px;color:#cccccc;line-height:1.6;position:relative;padding-right:16px;">
+          <span id="reason-text-${i}" class="found-text-clamped" style="color:${c.reasoning?'#cccccc':'#555555'};">${escHtml(safeStr(c.reasoning) || "—")}</span>
+          <span class="found-expand-btn" id="reason-btn-${i}" onclick="event.stopPropagation();toggleReasonText(${i})">+</span>
+        </div>
+      </div>
       ${(c.suggestedLanguage || c.recommendation === "negotiate" || (c.recommendation === "reject" && c._signalType === "Removed Language")) ? `
-        <div style="font-size:11px;background:rgba(34,197,94,0.04);padding:8px;margin-bottom:8px;line-height:1.5;border:1px solid rgba(34,197,94,0.15);border-left:2px solid rgba(34,197,94,0.6);border-radius:0 3px 3px 0;">
+        <div style="font-size:11px;background:rgba(255,255,255,0.02);padding:8px;margin-bottom:8px;line-height:1.5;border:1px solid rgba(255,255,255,0.08);border-radius:3px;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
-            <span style="font-size:10px;color:#4ade80;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Suggested</span>
+            <span style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Suggested</span>
             <span style="display:flex;gap:4px;">
               <button id="edit-btn-${i}" onclick="event.stopPropagation();editSuggestion(${i})" style="font-size:9px;padding:2px 7px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.04);color:#888;cursor:pointer;font-family:inherit;letter-spacing:0.04em;">✎ Edit</button>
               <button id="rephrase-btn-${i}" onclick="event.stopPropagation();rephraseSuggestion(${i})" style="font-size:9px;padding:2px 7px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.04);color:#888;cursor:pointer;font-family:inherit;letter-spacing:0.04em;">↺ Rephrase</button>
             </span>
           </div>
           <div id="sugg-view-${i}" style="position:relative;padding-right:16px;">
-            <span id="sugg-text-${i}" class="found-text-clamped" style="font-size:11px;color:${c.suggestedLanguage?'#d4d4d4':'#555555'};display:-webkit-box;">${escHtml(safeStr(c.suggestedLanguage) || "—")}</span>
+            <span id="sugg-text-${i}" class="found-text-clamped" style="font-size:11px;color:${c.suggestedLanguage?'#cccccc':'#555555'};display:-webkit-box;">${escHtml(safeStr(c.suggestedLanguage) || "—")}</span>
             <span class="found-expand-btn" id="sugg-btn-${i}" onclick="event.stopPropagation();toggleSuggText(${i})">+</span>
           </div>
           <div id="sugg-edit-${i}" style="display:none;">
@@ -1409,13 +1416,6 @@ function renderClauses() {
           </div>
         </div>
       ` : ""}
-      <div style="margin-bottom:8px;background:rgba(255,255,255,0.02);padding:7px 8px;border-radius:3px;border:1px solid rgba(255,255,255,0.06);">
-        <div style="font-size:10px;color:#a78bfa;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Analysis</div>
-        <div style="font-size:11px;color:#c8c8c8;line-height:1.6;position:relative;padding-right:16px;">
-          <span id="reason-text-${i}" class="found-text-clamped" style="color:${c.reasoning?'#c8c8c8':'#555555'};">${escHtml(safeStr(c.reasoning) || "—")}</span>
-          <span class="found-expand-btn" id="reason-btn-${i}" onclick="event.stopPropagation();toggleReasonText(${i})">+</span>
-        </div>
-      </div>
       <div class="decision-btns">
         ${["accept","negotiate","reject","reply"].map(d=>`
           <button class="decision-btn btn-${d} ${dec===d?`active-${d}`:""}"
