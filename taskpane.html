@@ -316,7 +316,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260308-F</span>
+        <span style="font-size:9px;color:#6b7280;">v20260308-G</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1020,7 +1020,17 @@ ${item._docContext ? `Preceding document text (use for section number context):\
         if (e.message.includes("Rate limited")) await new Promise(r => setTimeout(r, 4000));
         continue; // always retry once on any failure
       }
-      fallback.reasoning = e.message;
+      // Both attempts failed — return what we have but try to fill suggestedLanguage separately
+      const needsSugg = fallback.recommendation === "negotiate" ||
+        (fallback.recommendation === "reject" && item.type === "Removed Language");
+      if (needsSugg && !fallback.suggestedLanguage) {
+        try {
+          const suggPrompt = item.type === "Removed Language"
+            ? `Return only the original contract text verbatim, with no commentary:\n\n"${item.text.slice(0,600)}"`
+            : `Write a single concise contract clause that counters or replaces the following text, using plain language. Return only the clause text:\n\n"${item.text.slice(0,600)}"`;
+          fallback.suggestedLanguage = (await callClaude("You are a contract language expert. Return only the requested text, no explanation.", suggPrompt, 400)).trim();
+        } catch(_) {}
+      }
       return fallback;
     }
   }
