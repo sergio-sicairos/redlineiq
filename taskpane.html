@@ -319,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260308-I</span>
+        <span style="font-size:9px;color:#6b7280;">v20260308-J</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -2548,7 +2548,7 @@ Answer questions about our positions, the current review, contracts, or any topi
 function _renderAskWelcome() {
   const msgs = document.getElementById("ask-ai-messages");
   if (!msgs) return;
-  msgs.innerHTML = `<div style="color:#7040bb;font-size:11px;padding:8px 0;text-align:center;line-height:1.6;">Ask anything — positions,<br>review, or general contract questions.</div>`;
+  msgs.innerHTML = `<div style="color:rgba(255,255,255,0.35);font-size:11px;padding:8px 0;text-align:center;line-height:1.6;">Ask anything — positions,<br>review, or general contract questions.</div>`;
 }
 
 function _appendAskBubble(role, text) {
@@ -2563,8 +2563,8 @@ function _appendAskBubble(role, text) {
   bubble.innerHTML = `<div style="
     max-width:85%;font-size:11px;line-height:1.5;padding:7px 10px;border-radius:4px;white-space:pre-wrap;word-break:break-word;
     ${role==="user"
-      ? "background:rgba(91,14,255,0.4);color:#f0ebff;border:1px solid rgba(91,14,255,0.6);"
-      : "background:rgba(91,14,255,0.15);color:#ddd4f5;border:1px solid rgba(91,14,255,0.25);"}
+      ? "background:rgba(91,14,255,0.5);color:#ffffff;border:1px solid rgba(91,14,255,0.6);"
+      : "background:rgba(255,255,255,0.07);color:#e8e8e8;border:1px solid rgba(255,255,255,0.1);"}
   ">${escHtml(text)}</div>`;
   msgs.appendChild(bubble);
   msgs.scrollTop = msgs.scrollHeight;
@@ -2576,7 +2576,7 @@ function _appendAskTyping() {
   const el = document.createElement("div");
   el.id = "ask-typing";
   el.style.cssText = "margin-bottom:8px;display:flex;";
-  el.innerHTML = `<div style="font-size:11px;color:#7040bb;padding:6px 10px;border:1px solid rgba(91,14,255,0.2);border-radius:4px;background:rgba(91,14,255,0.08);">✦ ✦ ✦</div>`;
+  el.innerHTML = `<div style="font-size:11px;color:rgba(255,255,255,0.4);padding:6px 10px;border:1px solid rgba(255,255,255,0.08);border-radius:4px;background:rgba(255,255,255,0.04);">✦ ✦ ✦</div>`;
   msgs.appendChild(el);
   msgs.scrollTop = msgs.scrollHeight;
 }
@@ -2634,19 +2634,19 @@ async function _callClaudeChat(system, messages) {
 </script>
 
 <!-- ── Ask AI floating UI ─────────────────────────────────────────────────── -->
-<div id="ask-ai-panel" style="display:none;position:fixed;bottom:62px;right:20px;width:290px;height:380px;background:#2d2245;border:1px solid rgba(91,14,255,0.5);border-radius:8px;flex-direction:column;z-index:1000;box-shadow:0 8px 40px rgba(91,14,255,0.3),0 2px 8px rgba(0,0,0,0.5);">
-  <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-bottom:1px solid rgba(91,14,255,0.25);background:linear-gradient(135deg,rgba(91,14,255,0.4),rgba(91,14,255,0.15));border-radius:8px 8px 0 0;">
-    <span style="font-size:11px;font-weight:700;color:#c4a8ff;letter-spacing:0.08em;">✦ ASK AI</span>
-    <span onclick="toggleAskAI()" style="font-size:13px;color:#7040bb;cursor:pointer;line-height:1;padding:0 2px;" onmouseover="this.style.color='#c4a8ff'" onmouseout="this.style.color='#7040bb'">✕</span>
+<div id="ask-ai-panel" style="display:none;position:fixed;bottom:62px;right:20px;width:290px;height:380px;background:#1e1a2e;border:1px solid rgba(255,255,255,0.15);border-radius:8px;flex-direction:column;z-index:1000;box-shadow:0 8px 40px rgba(0,0,0,0.5),0 0 0 1px rgba(91,14,255,0.2);">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-bottom:1px solid rgba(255,255,255,0.08);background:rgba(91,14,255,0.2);border-radius:8px 8px 0 0;">
+    <span style="font-size:11px;font-weight:700;color:#ffffff;letter-spacing:0.08em;">✦ ASK AI</span>
+    <span onclick="toggleAskAI()" style="font-size:13px;color:rgba(255,255,255,0.4);cursor:pointer;line-height:1;padding:0 2px;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255,255,255,0.4)'">✕</span>
   </div>
-  <div id="ask-ai-messages" style="flex:1;overflow-y:auto;padding:10px;scrollbar-width:thin;scrollbar-color:rgba(91,14,255,0.4) transparent;"></div>
-  <div style="padding:8px;border-top:1px solid rgba(91,14,255,0.25);display:flex;gap:6px;align-items:flex-end;">
+  <div id="ask-ai-messages" style="flex:1;overflow-y:auto;padding:10px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.1) transparent;"></div>
+  <div style="padding:8px;border-top:1px solid rgba(255,255,255,0.08);display:flex;gap:6px;align-items:flex-end;">
     <textarea id="ask-ai-input" placeholder="Ask anything…" rows="1"
-      style="flex:1;background:rgba(91,14,255,0.15);border:1px solid rgba(91,14,255,0.45);color:#e2d9f3;font-size:11px;font-family:inherit;padding:6px 8px;resize:none;outline:none;border-radius:4px;line-height:1.4;max-height:80px;overflow-y:auto;"
+      style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:#ffffff;font-size:11px;font-family:inherit;padding:6px 8px;resize:none;outline:none;border-radius:4px;line-height:1.4;max-height:80px;overflow-y:auto;"
       onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAskAI();}"
       oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,80)+'px'"
-      onfocus="this.style.borderColor='rgba(91,14,255,0.8)'" onblur="this.style.borderColor='rgba(91,14,255,0.4)'"></textarea>
-    <button id="ask-ai-send" onclick="sendAskAI()" style="padding:6px 10px;background:#5b0eff;border:1px solid rgba(91,14,255,0.7);color:#fff;font-size:13px;cursor:pointer;border-radius:4px;flex-shrink:0;box-shadow:0 2px 10px rgba(91,14,255,0.6);">↑</button>
+      onfocus="this.style.borderColor='rgba(91,14,255,0.8)'" onblur="this.style.borderColor='rgba(255,255,255,0.15)'"></textarea>
+    <button id="ask-ai-send" onclick="sendAskAI()" style="padding:6px 10px;background:#5b0eff;border:none;color:#fff;font-size:13px;cursor:pointer;border-radius:4px;flex-shrink:0;box-shadow:0 2px 10px rgba(91,14,255,0.5);">↑</button>
   </div>
 </div>
 
