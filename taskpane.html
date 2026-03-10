@@ -319,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260308-L</span>
+        <span style="font-size:9px;color:#6b7280;">v20260309-B</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -594,10 +594,14 @@ async function connectDrive() {
 
   const authUrl = `https://sergio-sicairos.github.io/redlineiq/auth.html?client_id=${encodeURIComponent(clientId)}`;
 
+  if (!Office.context.ui || !Office.context.ui.displayDialogAsync) {
+    statusEl.innerHTML = `<span style="color:#ef4444">Dialog API not available. Update Office and try again.</span>`;
+    return;
+  }
+
   Office.context.ui.displayDialogAsync(authUrl, { height: 60, width: 40, promptBeforeOpen: false }, (result) => {
     if (result.status === Office.AsyncResultStatus.Failed) {
-      // Fallback to GIS popup for Word Online / browsers
-      _connectDriveGIS(clientId);
+      statusEl.innerHTML = `<span style="color:#ef4444">Dialog failed (error ${result.error?.code}): ${result.error?.message || "unknown"}</span>`;
       return;
     }
 
@@ -1431,9 +1435,9 @@ function renderClauses() {
         </div>
       </div>
       ${(c.suggestedLanguage || c.recommendation === "negotiate" || (c.recommendation === "reject" && c._signalType === "Removed Language")) ? `
-        <div style="font-size:11px;background:rgba(255,255,255,0.02);padding:8px;margin-bottom:8px;line-height:1.5;border:1px solid rgba(255,255,255,0.08);border-radius:3px;">
+        <div style="font-size:11px;background:rgba(91,14,255,0.08);padding:8px;margin-bottom:8px;line-height:1.5;border:1px solid rgba(91,14,255,0.35);border-radius:4px;box-shadow:0 0 8px rgba(91,14,255,0.12);">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
-            <span style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Suggested</span>
+            <span style="font-size:10px;color:#9b72ff;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">⬡ Suggested</span>
             <span style="display:flex;gap:4px;">
               <button id="edit-btn-${i}" onclick="event.stopPropagation();editSuggestion(${i})" style="font-size:9px;padding:2px 7px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.04);color:#888;cursor:pointer;font-family:inherit;letter-spacing:0.04em;">✎ Edit</button>
               <button id="rephrase-btn-${i}" onclick="event.stopPropagation();rephraseSuggestion(${i})" style="font-size:9px;padding:2px 7px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.04);color:#888;cursor:pointer;font-family:inherit;letter-spacing:0.04em;">↺ Rephrase</button>
