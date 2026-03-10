@@ -316,7 +316,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260308-C</span>
+        <span style="font-size:9px;color:#6b7280;">v20260308-D</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1016,9 +1016,9 @@ ${item._docContext ? `Preceding document text (use for section number context):\
         throw new Error("negotiate missing suggestedLanguage");
       return parsed;
     } catch(e) {
-      if (e.message.includes("Rate limited") && attempt === 0) {
-        await new Promise(r => setTimeout(r, 4000)); // wait 4s then retry once
-        continue;
+      if (attempt === 0) {
+        if (e.message.includes("Rate limited")) await new Promise(r => setTimeout(r, 4000));
+        continue; // always retry once on any failure
       }
       fallback.reasoning = e.message;
       return fallback;
