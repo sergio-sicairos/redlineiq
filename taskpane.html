@@ -588,31 +588,67 @@ async function saveAndConnectDrive() {
 async function connectDrive() {
   const clientId = await getClientId();
   if (!clientId) return;
+
+  const statusEl = document.getElementById("drive-status");
+  statusEl.innerHTML = '<span style="color:#888">Opening sign-in…</span>';
+
+  const authUrl = `https://sergio-sicairos.github.io/redlineiq/auth.html?client_id=${encodeURIComponent(clientId)}`;
+
+  Office.context.ui.displayDialogAsync(authUrl, { height: 60, width: 40, promptBeforeOpen: false }, (result) => {
+    if (result.status === Office.AsyncResultStatus.Failed) {
+      // Fallback to GIS popup for Word Online / browsers
+      _connectDriveGIS(clientId);
+      return;
+    }
+
+    const dialog = result.value;
+
+    dialog.addEventHandler(Office.EventType.DialogMessageReceived, async (arg) => {
+      dialog.close();
+      try {
+        const data = JSON.parse(arg.message);
+        if (data.error) {
+          statusEl.innerHTML = `<span style="color:#ef4444">Auth error: ${data.error}</span>`;
+          return;
+        }
+        localStorage.setItem("redlineiq_drive_token", data.token);
+        localStorage.setItem("redlineiq_drive_expiry", data.expiry.toString());
+        statusEl.innerHTML = '<span style="color:#22c55e">✓ Drive connected.</span>';
+        const si = document.getElementById("sync-status");
+        if (si) { si.textContent = "● Drive"; si.style.color = "#22c55e"; }
+        try { playbook = await loadFromDrive(); renderPlaybookSummary(); } catch(e) { console.warn(e); }
+      } catch(e) {
+        statusEl.innerHTML = `<span style="color:#ef4444">Auth failed: ${e.message}</span>`;
+      }
+    });
+
+    dialog.addEventHandler(Office.EventType.DialogEventReceived, (arg) => {
+      if (arg.error === 12006) statusEl.innerHTML = '<span style="color:#888">Sign-in cancelled.</span>';
+    });
+  });
+}
+
+// Fallback for Word Online / browsers where displayDialogAsync isn't available
+function _connectDriveGIS(clientId) {
+  const statusEl = document.getElementById("drive-status");
   try {
     const client = google.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: DRIVE_SCOPE,
       callback: async (resp) => {
-        if (resp.error) {
-          document.getElementById("drive-status").innerHTML = `<span style="color:#ef4444">Auth error: ${resp.error}</span>`;
-          return;
-        }
+        if (resp.error) { statusEl.innerHTML = `<span style="color:#ef4444">Auth error: ${resp.error}</span>`; return; }
         const expiry = Date.now() + (resp.expires_in * 1000);
         localStorage.setItem("redlineiq_drive_token", resp.access_token);
         localStorage.setItem("redlineiq_drive_expiry", expiry.toString());
-        document.getElementById("drive-status").innerHTML = '<span style="color:#22c55e">✓ Drive connected.</span>';
-        document.getElementById("sync-status").textContent = "● Drive";
-        document.getElementById("sync-status").style.color = "#22c55e";
-        // Load playbook now that we have auth
-        try {
-          playbook = await loadFromDrive();
-          renderPlaybookSummary();
-        } catch(e) { console.warn("Drive load after auth:", e.message); }
+        statusEl.innerHTML = '<span style="color:#22c55e">✓ Drive connected.</span>';
+        const si = document.getElementById("sync-status");
+        if (si) { si.textContent = "● Drive"; si.style.color = "#22c55e"; }
+        try { playbook = await loadFromDrive(); renderPlaybookSummary(); } catch(e) { console.warn(e); }
       }
     });
     client.requestAccessToken();
   } catch(e) {
-    document.getElementById("drive-status").innerHTML = `<span style="color:#ef4444">Error: ${e.message}</span>`;
+    statusEl.innerHTML = `<span style="color:#ef4444">Error: ${e.message}</span>`;
   }
 }
 
