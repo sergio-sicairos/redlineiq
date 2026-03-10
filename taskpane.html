@@ -100,12 +100,15 @@
     .decision-btn.btn-accept    { color:#22c55e; border-color:rgba(34,197,94,0.3); background:rgba(34,197,94,0.05); }
     .decision-btn.btn-negotiate { color:#eab308; border-color:rgba(234,179,8,0.3); background:rgba(234,179,8,0.05); }
     .decision-btn.btn-reject    { color:#e02020; border-color:rgba(224,32,32,0.3); background:rgba(224,32,32,0.05); }
+    .decision-btn.btn-reply     { color:#60a5fa; border-color:rgba(96,165,250,0.3); background:rgba(96,165,250,0.05); }
     .decision-btn.btn-accept:hover    { background:rgba(34,197,94,0.15);  border-color:rgba(34,197,94,0.8);  color:#4ade80; box-shadow:0 0 10px rgba(34,197,94,0.2); }
     .decision-btn.btn-negotiate:hover { background:rgba(234,179,8,0.15);  border-color:rgba(234,179,8,0.8);  color:#facc15; box-shadow:0 0 10px rgba(234,179,8,0.2); }
     .decision-btn.btn-reject:hover    { background:rgba(224,32,32,0.15);  border-color:rgba(224,32,32,0.8);  color:#ff4444; box-shadow:0 0 10px rgba(224,32,32,0.2); }
+    .decision-btn.btn-reply:hover     { background:rgba(96,165,250,0.15); border-color:rgba(96,165,250,0.8); color:#93c5fd; box-shadow:0 0 10px rgba(96,165,250,0.2); }
     .decision-btn.active-accept    { border-color:#22c55e; background:rgba(34,197,94,0.15);  color:#4ade80;  box-shadow:0 0 10px rgba(34,197,94,0.2); }
     .decision-btn.active-negotiate { border-color:#eab308; background:rgba(234,179,8,0.15);  color:#facc15; box-shadow:0 0 10px rgba(234,179,8,0.2); }
     .decision-btn.active-reject    { border-color:#e02020; background:rgba(224,32,32,0.15);  color:#ff4444;  box-shadow:0 0 10px rgba(224,32,32,0.2); }
+    .decision-btn.active-reply     { border-color:#60a5fa; background:rgba(96,165,250,0.15); color:#93c5fd;  box-shadow:0 0 10px rgba(96,165,250,0.2); }
     .insert-btn {
       margin-top:6px; padding:4px 9px; font-size:11px; font-weight:600; cursor:pointer;
       border:1px solid rgba(255,255,255,0.08);
@@ -316,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260308-G</span>
+        <span style="font-size:9px;color:#6b7280;">v20260308-H</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1414,9 +1417,9 @@ function renderClauses() {
         </div>
       </div>
       <div class="decision-btns">
-        ${["accept","negotiate","reject"].map(d=>`
+        ${["accept","negotiate","reject","reply"].map(d=>`
           <button class="decision-btn btn-${d} ${dec===d?`active-${d}`:""}"
-            onclick="setDecision(${i},'${d}')">${{accept:"✓ Accept",negotiate:"↔ Counter",reject:"✕ Reject"}[d]}</button>
+            onclick="setDecision(${i},'${d}')">${{accept:"✓ Accept",negotiate:"↔ Counter",reject:"✕ Reject",reply:"↩ Reply"}[d]}</button>
         `).join("")}
       </div>
       ${c.userDecision && !c.applied ? `
@@ -1632,8 +1635,8 @@ async function applyDecisionToDoc(idx, decision) {
     return;
   }
 
-  // Comment cards: reply to the thread for negotiate and reject
-  if (clause._isComment && clause._commentIdx != null && (decision === "negotiate" || decision === "reject")) {
+  // Comment cards: reply to the thread for negotiate, reject, and reply
+  if (clause._isComment && clause._commentIdx != null && (decision === "negotiate" || decision === "reject" || decision === "reply")) {
     try {
       await Word.run(async (context) => {
         const coll = context.document.body.getComments();
@@ -1647,6 +1650,24 @@ async function applyDecisionToDoc(idx, decision) {
       });
     } catch(e) {
       alert("Could not post reply: " + (e.message || e));
+    }
+    return;
+  }
+
+  // Non-comment reply: insert comment with suggested text
+  if (decision === "reply") {
+    const foundText = (clause && clause.found) || "";
+    if (!foundText) return;
+    try {
+      await Word.run(async (context) => {
+        const range = await findClauseRange(context, foundText);
+        if (!range) return;
+        const replyText = clause.suggestedLanguage || "↩ Reply";
+        range.insertComment(replyText);
+        await context.sync();
+      });
+    } catch(e) {
+      alert("Could not insert comment: " + (e.message || e));
     }
     return;
   }
