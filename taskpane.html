@@ -316,7 +316,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260308-B</span>
+        <span style="font-size:9px;color:#6b7280;">v20260308-C</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -2603,7 +2603,7 @@ async function _callClaudeChat(system, messages) {
 </script>
 
 <!-- ── Ask AI floating UI ─────────────────────────────────────────────────── -->
-<div id="ask-ai-panel" style="display:none;position:fixed;bottom:52px;right:20px;width:290px;height:380px;background:#1e1530;border:1px solid rgba(91,14,255,0.5);border-radius:8px;flex-direction:column;z-index:1000;box-shadow:0 8px 40px rgba(91,14,255,0.3),0 2px 8px rgba(0,0,0,0.5);">
+<div id="ask-ai-panel" style="display:none;position:fixed;bottom:52px;right:20px;width:290px;height:380px;background:#2d2245;border:1px solid rgba(91,14,255,0.5);border-radius:8px;flex-direction:column;z-index:1000;box-shadow:0 8px 40px rgba(91,14,255,0.3),0 2px 8px rgba(0,0,0,0.5);">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-bottom:1px solid rgba(91,14,255,0.25);background:linear-gradient(135deg,rgba(91,14,255,0.4),rgba(91,14,255,0.15));border-radius:8px 8px 0 0;">
     <span style="font-size:11px;font-weight:700;color:#c4a8ff;letter-spacing:0.08em;">✦ ASK AI</span>
     <span onclick="toggleAskAI()" style="font-size:13px;color:#7040bb;cursor:pointer;line-height:1;padding:0 2px;" onmouseover="this.style.color='#c4a8ff'" onmouseout="this.style.color='#7040bb'">✕</span>
