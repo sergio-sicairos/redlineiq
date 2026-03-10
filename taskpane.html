@@ -316,7 +316,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260308-D</span>
+        <span style="font-size:9px;color:#6b7280;">v20260308-E</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -973,7 +973,7 @@ async function reviewSingleItem(item, posCtx, docType) {
   // Direction-aware decision logic depends on signal type
   const decisionLogic = item.type === "Removed Language"
     ? `This text is being DELETED (strikethrough) by the counterparty. Evaluate whether removing it is acceptable TO US.
-- If this text is our standard/template language or favorable to us → "reject" (we want to keep it)
+- If this text is our standard/template language or favorable to us → "reject"; suggestedLanguage = the original text verbatim (we want it restored)
 - If this text is unfavorable to us and its removal benefits us → "accept"
 - If partially acceptable or ambiguous → "negotiate"; suggestedLanguage = the revised version of the text we would accept keeping (required — never leave empty when negotiating)`
     : item.type === "Added Language"
@@ -1012,8 +1012,8 @@ ${item._docContext ? `Preceding document text (use for section number context):\
       const raw = await callClaude(sys, user, 800);
       const parsed = repairJSON(raw);
       if (!parsed) throw new Error("JSON parse failed");
-      if (parsed.recommendation === "negotiate" && !parsed.suggestedLanguage?.trim())
-        throw new Error("negotiate missing suggestedLanguage");
+      if ((parsed.recommendation === "negotiate" || (parsed.recommendation === "reject" && item.type === "Removed Language")) && !parsed.suggestedLanguage?.trim())
+        throw new Error("missing suggestedLanguage");
       return parsed;
     } catch(e) {
       if (attempt === 0) {
@@ -1374,7 +1374,7 @@ function renderClauses() {
         </div>
       </div>
       ` : ""}
-      ${(c.suggestedLanguage || c.recommendation === "negotiate") ? `
+      ${(c.suggestedLanguage || c.recommendation === "negotiate" || c.recommendation === "reject") ? `
         <div style="font-size:11px;color:#cccccc;background:rgba(255,255,255,0.03);padding:7px;margin-bottom:6px;line-height:1.4;border:1px solid rgba(255,255,255,0.15);border-left:2px solid rgba(224,32,32,0.7);">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
             <strong style="color:#ffffff">Suggested:</strong>
