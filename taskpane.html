@@ -330,7 +330,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260309-D</span>
+        <span style="font-size:9px;color:#6b7280;">v20260309-E</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -912,13 +912,21 @@ async function startReview() {
     await new Promise(r => setTimeout(r, 50));
 
     // 2. Build signal list — one item per detected change
+    const myName = getMyName().toLowerCase().trim();
+    const candidateComments = docComments.filter(c => {
+      if (c.hasReplies) return false;
+      if (myName && c.author && c.author.toLowerCase().includes(myName)) return false;
+      return true;
+    });
+
+    // Pre-filter: skip comments that are clearly agreements/acceptances
+    const agreementIndices = candidateComments.length
+      ? await filterAgreementComments(candidateComments)
+      : new Set();
+
     const items = [
-      ...docComments.filter(c => {
-        if (c.hasReplies) return false;
-        const myName = getMyName().toLowerCase().trim();
-        if (myName && c.author && c.author.toLowerCase().includes(myName)) return false;
-        return true;
-      }).map((c, idx) => ({ type: "Comment", text: c.content || "", anchor: c.anchoredText || "", author: c.author || "", _commentContent: c.content || "", _commentAnchor: c.anchoredText || "", _commentIdx: idx })),
+      ...candidateComments.filter((_, idx) => !agreementIndices.has(idx))
+        .map((c, idx) => ({ type: "Comment", text: c.content || "", anchor: c.anchoredText || "", author: c.author || "", _commentContent: c.content || "", _commentAnchor: c.anchoredText || "", _commentIdx: idx })),
       ...struckTexts.map(t => ({ type: "Removed Language", text: t, anchor: "", author: "" })),
       ...allAdded.map(a => ({ type: "Added Language", text: a.text, anchor: "", author: "" })),
     ].filter(i => i.text.trim().length > 2);
@@ -1898,6 +1906,24 @@ async function driveWriteFile(token, folderId, filename, data) {
       headers: { Authorization: `Bearer ${token}` },
       body: form
     });
+  }
+}
+
+// ── Pre-filter: skip comments that are agreements / acceptances ───────────────
+async function filterAgreementComments(comments) {
+  if (!comments.length) return new Set();
+  try {
+    const list = comments.map((c, i) => `${i}: "${c.content.slice(0, 200)}"`).join("\n");
+    const result = await callClaude(
+      "You are reviewing contract negotiation comments. Your only job is to identify comments that indicate the author is AGREEING or is OKAY with something — e.g. accepting a rejection, acknowledging a position, saying it's fine, no objection, or confirming they are good with the outcome. Return ONLY a JSON array of the indices (numbers) that are agreements. Return [] if none. No explanation.",
+      `Comments:\n${list}`,
+      256
+    );
+    const raw = result.match(/\[[\d,\s]*\]/)?.[0] || "[]";
+    const indices = JSON.parse(raw);
+    return new Set(indices.filter(n => typeof n === "number"));
+  } catch(_) {
+    return new Set(); // on failure, include all comments
   }
 }
 
