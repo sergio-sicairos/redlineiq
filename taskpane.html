@@ -319,7 +319,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260309-B</span>
+        <span style="font-size:9px;color:#6b7280;">v20260309-C</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -889,7 +889,7 @@ async function startReview() {
 
     // 2. Build signal list — one item per detected change
     const items = [
-      ...docComments.map((c, idx) => ({ type: "Comment", text: c.content || "", anchor: c.anchoredText || "", author: c.author || "", _commentContent: c.content || "", _commentAnchor: c.anchoredText || "", _commentIdx: idx })),
+      ...docComments.filter(c => !c.hasReplies).map((c, idx) => ({ type: "Comment", text: c.content || "", anchor: c.anchoredText || "", author: c.author || "", _commentContent: c.content || "", _commentAnchor: c.anchoredText || "", _commentIdx: idx })),
       ...struckTexts.map(t => ({ type: "Removed Language", text: t, anchor: "", author: "" })),
       ...allAdded.map(a => ({ type: "Added Language", text: a.text, anchor: "", author: "" })),
     ].filter(i => i.text.trim().length > 2);
@@ -1282,6 +1282,7 @@ function getDocumentComments() {
 
         const items = coll.items;
         let anchorTexts = items.map(() => "");
+        let replyCounts = items.map(() => 0);
 
         // Try to load anchor text in one batch sync (2.5s inner timeout)
         try {
@@ -1296,11 +1297,25 @@ function getDocumentComments() {
           // anchor loading timed out or unsupported — continue without it
         }
 
+        // Try to load reply counts
+        try {
+          const replyCols = items.map(c => c.replies);
+          replyCols.forEach(r => r.load("items/authorName"));
+          await Promise.race([
+            context.sync(),
+            new Promise((_, rej) => setTimeout(() => rej(new Error("reply-timeout")), 2500))
+          ]);
+          replyCounts = replyCols.map(r => { try { return r.items.length; } catch(_) { return 0; } });
+        } catch(_) {
+          // reply loading unsupported — continue without it
+        }
+
         const out = items.map((c, i) => ({
           author:       c.authorName || "Reviewer",
           content:      c.content    || "",
           anchoredText: anchorTexts[i] || "",
-          resolved:     c.resolved
+          resolved:     c.resolved,
+          hasReplies:   replyCounts[i] > 0
         }));
         resolve(out);
       } catch(e) {
