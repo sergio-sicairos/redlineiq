@@ -284,6 +284,17 @@
     </button>
   </div>
 
+  <div class="card" style="margin-top:10px;">
+    <div class="section-title">Your Name</div>
+    <div class="text-xs text-muted" style="margin-bottom:8px;">
+      Comments you authored will be excluded from review cards.
+    </div>
+    <input type="text" id="myname-input" placeholder="e.g. Sergio Sicairos"
+      data-1p-ignore autocomplete="off" data-lpignore="true" data-form-type="other" />
+    <button class="btn btn-primary btn-full" onclick="saveMyName()">Save</button>
+    <div id="myname-status" style="margin-top:8px; font-size:11px;"></div>
+  </div>
+
   <button class="btn btn-secondary btn-full" style="margin-top:8px;" onclick="toggleSettings()">← Back</button>
 </div>
 
@@ -319,7 +330,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260309-C</span>
+        <span style="font-size:9px;color:#6b7280;">v20260309-D</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -557,6 +568,16 @@ async function storageSet(key, value) {
 
 // ── API Key ───────────────────────────────────────────────────────────────────
 async function getApiKey() { return storageGet("redlineiq_api_key"); }
+
+function getMyName() {
+  return localStorage.getItem("redlineiq_myname") || (Office.context && Office.context.displayName) || "";
+}
+function saveMyName() {
+  const val = document.getElementById("myname-input").value.trim();
+  if (!val) { document.getElementById("myname-status").innerHTML = '<span style="color:#ef4444">Enter your name.</span>'; return; }
+  localStorage.setItem("redlineiq_myname", val);
+  document.getElementById("myname-status").innerHTML = '<span style="color:#22c55e">Saved.</span>';
+}
 async function saveApiKey() {
   const val = document.getElementById("api-key-input").value.trim();
   if (!val.startsWith("sk-ant-")) {
@@ -701,6 +722,9 @@ async function toggleSettings() {
     if (ind) ind.innerHTML = driveTokenValid()
       ? '<span style="color:#16a34a">● Connected</span>'
       : '<span style="color:#555555">● Not connected</span>';
+    const myName = getMyName();
+    document.getElementById("myname-input").value = myName;
+    document.getElementById("myname-status").textContent = myName ? "" : "";
     document.getElementById("tab-bar").style.display = "none";
   } else {
     s.style.display = "none";
@@ -889,7 +913,12 @@ async function startReview() {
 
     // 2. Build signal list — one item per detected change
     const items = [
-      ...docComments.filter(c => !c.hasReplies).map((c, idx) => ({ type: "Comment", text: c.content || "", anchor: c.anchoredText || "", author: c.author || "", _commentContent: c.content || "", _commentAnchor: c.anchoredText || "", _commentIdx: idx })),
+      ...docComments.filter(c => {
+        if (c.hasReplies) return false;
+        const myName = getMyName().toLowerCase().trim();
+        if (myName && c.author && c.author.toLowerCase().includes(myName)) return false;
+        return true;
+      }).map((c, idx) => ({ type: "Comment", text: c.content || "", anchor: c.anchoredText || "", author: c.author || "", _commentContent: c.content || "", _commentAnchor: c.anchoredText || "", _commentIdx: idx })),
       ...struckTexts.map(t => ({ type: "Removed Language", text: t, anchor: "", author: "" })),
       ...allAdded.map(a => ({ type: "Added Language", text: a.text, anchor: "", author: "" })),
     ].filter(i => i.text.trim().length > 2);
