@@ -249,18 +249,17 @@
   <div class="logo">
     <span><span style="color:#ffffff">Py</span><span style="color:#e02020">line</span></span>
   </div>
-  <button class="settings-icon" onclick="toggleSettings()" title="Settings">⚙</button>
 </div>
 
 <div id="tab-bar" style="display:flex;">
   <button class="tab-btn active" data-tab="review" onclick="switchTab('review')">AI Review</button>
   <button class="tab-btn" data-tab="upload" onclick="switchTab('upload')">Upload</button>
   <button class="tab-btn" data-tab="resources" onclick="switchTab('resources')">Resources</button>
+  <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')">Settings</button>
 </div>
 
 <!-- Settings panel -->
-<div id="view-settings" style="display:none; padding:14px;">
-  <div style="font-weight:600; margin-bottom:12px; color:#ffffff;">Settings</div>
+<div id="tab-settings" style="display:none; padding:14px;">
 
   <div class="card">
     <div class="section-title">Anthropic API Key</div>
@@ -306,7 +305,6 @@
     <div id="myname-status" style="margin-top:8px; font-size:11px;"></div>
   </div>
 
-  <button class="btn btn-secondary btn-full" style="margin-top:8px;" onclick="toggleSettings()">← Back</button>
 </div>
 
 <!-- Loading screen -->
@@ -341,7 +339,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260309-L</span>
+        <span style="font-size:9px;color:#6b7280;">v20260309-M</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -715,33 +713,8 @@ async function ensureDriveToken() {
   ]);
 }
 
-async function toggleSettings() {
-  const s = document.getElementById("view-settings");
-  const m = document.getElementById("main");
-  const l = document.getElementById("loading-screen");
-  if (s.style.display === "none") {
-    s.style.display = "block";
-    m.style.display = "none";
-    l.style.display = "none";
-    const k = await getApiKey();
-    document.getElementById("api-key-input").value = k ? "••••••••••••••••" : "";
-    document.getElementById("key-status").textContent = k ? "A key is already saved." : "";
-    const cid = await getClientId();
-    document.getElementById("gclient-input").value = cid ? "••••••••••••••••" : "";
-    document.getElementById("drive-status").textContent = driveTokenValid() ? "✓ Drive connected." : cid ? "Token expired — reconnect." : "";
-    const ind = document.getElementById("drive-indicator");
-    if (ind) ind.innerHTML = driveTokenValid()
-      ? '<span style="color:#16a34a">● Connected</span>'
-      : '<span style="color:#555555">● Not connected</span>';
-    const myName = getMyName();
-    document.getElementById("myname-input").value = myName;
-    document.getElementById("myname-status").textContent = myName ? "" : "";
-    document.getElementById("tab-bar").style.display = "none";
-  } else {
-    s.style.display = "none";
-    m.style.display = "block";
-    document.getElementById("tab-bar").style.display = "flex";
-  }
+function toggleSettings() {
+  switchTab("settings");
 }
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
@@ -755,7 +728,7 @@ Office.onReady(async (info) => {
   document.getElementById("loading-screen").style.display = "none";
   document.getElementById("tab-bar").style.display = "flex";
   if (!await getApiKey()) {
-    document.getElementById("view-settings").style.display = "block";
+    switchTab("settings");
     document.getElementById("key-status").innerHTML = '<span style="color:#f59e0b">Please enter your API key to get started.</span>';
   } else {
     document.getElementById("main").style.display = "block";
@@ -2048,15 +2021,28 @@ async function callClaude(system, user, maxTokens = 4096) {
 
 // ── Navigate to clause in document ───────────────────────────────────────────
 // ── Tabs ──────────────────────────────────────────────────────────────────────
-function switchTab(tab) {
+async function switchTab(tab) {
   // Always collapse resource overlay views when switching any tab
   document.getElementById("view-position-history").style.display = "none";
   document.getElementById("view-distill").style.display = "none";
-  ["review","upload","resources"].forEach(t => {
+  ["review","upload","resources","settings"].forEach(t => {
     document.getElementById(`tab-${t}`).style.display = t === tab ? "block" : "none";
-    document.querySelector(`[data-tab="${t}"]`).classList.toggle("active", t === tab);
+    document.querySelector(`[data-tab="${t}"]`)?.classList.toggle("active", t === tab);
   });
   if (tab === "resources") loadResources();
+  if (tab === "settings") {
+    const k = await getApiKey();
+    document.getElementById("api-key-input").value = k ? "••••••••••••••••" : "";
+    document.getElementById("key-status").textContent = k ? "A key is already saved." : "";
+    const cid = await getClientId();
+    document.getElementById("gclient-input").value = cid ? "••••••••••••••••" : "";
+    document.getElementById("drive-status").textContent = driveTokenValid() ? "✓ Drive connected." : cid ? "Token expired — reconnect." : "";
+    const ind = document.getElementById("drive-indicator");
+    if (ind) ind.innerHTML = driveTokenValid()
+      ? '<span style="color:#16a34a">● Connected</span>'
+      : '<span style="color:#555555">● Not connected</span>';
+    document.getElementById("myname-input").value = getMyName();
+  }
 }
 
 // ── Upload ────────────────────────────────────────────────────────────────────
