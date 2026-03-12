@@ -339,7 +339,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260309-P</span>
+        <span style="font-size:9px;color:#6b7280;">v20260309-Q</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -939,11 +939,21 @@ async function startReview() {
       return true;
     });
 
-    // Pre-filter: skip comments that are clearly agreements/acceptances
-    const agreementIndices = candidateComments.length
-      ? await filterAgreementComments(candidateComments)
-      : new Set();
+    // 3. Build positions context + find matching template
+    const posCtx = (playbook.clauses||[]).map(c =>
+      `[${c.category}]: Standard: ${anonymizeForAI(c.standardLang||"").slice(0,150)}${c.fallbackLang ? ` | Fallback: ${anonymizeForAI(c.fallbackLang).slice(0,100)}` : ""}${c.hardLimit ? ` | Hard Limit: ${anonymizeForAI(c.hardLimit).slice(0,80)}` : ""}`
+    ).join("\n");
 
+    const matchingTemplate = (playbook.contracts || []).find(
+      c => c.category === "templates" && c.type === reviewDocType && c.text
+    );
+    const templateText = matchingTemplate?.text || "";
+
+    // Pre-filters (run in parallel for speed)
+    const [agreementIndices, trivialAddedIndices] = await Promise.all([
+      candidateComments.length ? filterAgreementComments(candidateComments) : Promise.resolve(new Set()),
+      allAdded.length ? filterTrivialAdditions(allAdded, templateText) : Promise.resolve(new Set()),
+    ]);
 
     const items = [
       ...candidateComments.filter((_, idx) => !agreementIndices.has(idx))
@@ -954,21 +964,15 @@ async function startReview() {
     ].filter(i => i.text.trim().length > 2);
 
     // Pre-compute section numbers and doc context snippets (pure JS, no API calls)
-    // Minimum 25 chars required before trusting a position match — short/common
-    // phrases (e.g. "shall", "customer") appear many times in a contract and
-    // indexOf() would return the FIRST occurrence, often in the wrong section.
     const MIN_SEARCH_LEN = 25;
     items.forEach(item => {
-      // For comments: prefer anchor (verbatim doc text); fall back to content only
-      // if anchor is long enough to be uniquely identifying.
       const searchText = (item.anchor && item.anchor.length >= MIN_SEARCH_LEN)
         ? item.anchor
         : (item.type !== "Comment" && item.text.length >= MIN_SEARCH_LEN)
           ? item.text
           : "";
-      if (!searchText) return; // not enough context — skip, let AI handle section
+      if (!searchText) return;
       item._preSection = inferSectionFromDoc(searchText, docText);
-      // Capture ~300 chars of docText before this item's position for AI context
       const pos = docText.toLowerCase().indexOf(searchText.slice(0, 80).toLowerCase());
       if (pos > 0) item._docContext = docText.slice(Math.max(0, pos - 300), pos).trim().slice(-300);
     });
@@ -979,22 +983,6 @@ async function startReview() {
       show("view-idle");
       return;
     }
-
-    // 3. Build compact positions context (sent with every item — keep small)
-    const posCtx = (playbook.clauses||[]).map(c =>
-      `[${c.category}]: Standard: ${anonymizeForAI(c.standardLang||"").slice(0,150)}${c.fallbackLang ? ` | Fallback: ${anonymizeForAI(c.fallbackLang).slice(0,100)}` : ""}${c.hardLimit ? ` | Hard Limit: ${anonymizeForAI(c.hardLimit).slice(0,80)}` : ""}`
-    ).join("\n");
-
-    // Find the matching template for this doc type (used as primary comparison baseline)
-    const matchingTemplate = (playbook.contracts || []).find(
-      c => c.category === "templates" && c.type === reviewDocType && c.text
-    );
-    const templateText = matchingTemplate?.text || "";
-
-    // Pre-filter: skip Added Language items that are just template/standard words
-    const trivialAddedIndices = allAdded.length
-      ? await filterTrivialAdditions(allAdded, templateText)
-      : new Set();
 
     // 4. Review items in batches of 3 to avoid rate limits
     let completed = 0;
