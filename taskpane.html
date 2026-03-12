@@ -352,7 +352,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260312-E</span>
+        <span style="font-size:9px;color:#6b7280;">v20260312-F</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -893,8 +893,8 @@ async function startReview() {
     const [rawText, docComments, ooxmlChanges, coloredTexts] = await Promise.all([
       withTimeout(getDocumentText(),    6000, ""),
       withTimeout(getDocumentComments(),4000, []),
-      withTimeout(getOoxmlChanges(),    8000, { struck: [], inserted: [] }),
-      withTimeout(getColoredTexts(),    4000, []),
+      withTimeout(getOoxmlChanges(),   12000, { struck: [], inserted: [] }),
+      withTimeout(getColoredTexts(),   15000, []),
     ]);
     if (_reviewCancelled) return;
     docText = rawText;
@@ -1243,14 +1243,20 @@ function getOoxmlChanges() {
         const inserted = [];
 
         for (const para of xmlDoc.getElementsByTagNameNS(WNS, "p")) {
-          // Returns non-black explicit color on a run, or null
+          // Returns non-black explicit color on a run, or null.
+          // Handles both explicit hex (w:val) and theme accent colors (w:themeColor).
           const getRunColor = (run) => {
             const rPr = run.getElementsByTagNameNS(WNS, "rPr")[0];
             if (!rPr) return null;
             const colorEl = rPr.getElementsByTagNameNS(WNS, "color")[0];
             if (!colorEl) return null;
             const val = (colorEl.getAttribute("w:val") || colorEl.getAttributeNS(WNS, "val") || "").toLowerCase();
-            return (val && val !== "auto" && val !== "000000" && val !== "ffffff") ? val : null;
+            // Explicit hex that isn't black/white
+            if (val && val !== "auto" && val !== "000000" && val !== "ffffff") return val;
+            // Theme color fallback — only flag accent/hyperlink (not dark/light/bg/text defaults)
+            const theme = (colorEl.getAttribute("w:themeColor") || colorEl.getAttributeNS(WNS, "themeColor") || "").toLowerCase();
+            if (theme && (theme.startsWith("accent") || theme === "hyperlink")) return theme;
+            return null;
           };
 
           // True if this run is inside a <w:ins> child of this para (handled separately)
@@ -1654,7 +1660,7 @@ function renderClauses() {
       ${c.applied ? `<div style="font-size:10px;color:#555555;margin-top:6px;">✓ Applied to document</div>` : ""}
     </div>`;
   }).join("");
-  requestAnimationFrame(initFoundExpanders);
+  setTimeout(initFoundExpanders, 150);
 }
 
 function initFoundExpanders() {
