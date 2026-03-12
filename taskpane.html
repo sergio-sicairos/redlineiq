@@ -339,7 +339,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260309-O</span>
+        <span style="font-size:9px;color:#6b7280;">v20260309-P</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -944,10 +944,6 @@ async function startReview() {
       ? await filterAgreementComments(candidateComments)
       : new Set();
 
-    // Pre-filter: skip Added Language items that are just template/standard words
-    const trivialAddedIndices = allAdded.length
-      ? await filterTrivialAdditions(allAdded, templateText)
-      : new Set();
 
     const items = [
       ...candidateComments.filter((_, idx) => !agreementIndices.has(idx))
@@ -994,6 +990,11 @@ async function startReview() {
       c => c.category === "templates" && c.type === reviewDocType && c.text
     );
     const templateText = matchingTemplate?.text || "";
+
+    // Pre-filter: skip Added Language items that are just template/standard words
+    const trivialAddedIndices = allAdded.length
+      ? await filterTrivialAdditions(allAdded, templateText)
+      : new Set();
 
     // 4. Review items in batches of 3 to avoid rate limits
     let completed = 0;
