@@ -341,7 +341,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260309-J</span>
+        <span style="font-size:9px;color:#6b7280;">v20260309-K</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -916,16 +916,24 @@ async function startReview() {
     const struckTexts   = ooxmlChanges.struck;
     const trackedInserts = ooxmlChanges.inserted;
 
-    // Build a normalized set of playbook text to filter out template language
-    // that appears colored in the document (formatting artifact, not an addition).
-    const playbookTexts = (playbook.clauses || []).flatMap(c =>
-      [c.standard, c.fallback, c.hardLimit].filter(Boolean).map(t => t.toLowerCase().trim())
+    // Build a normalized text corpus from the uploaded template + playbook positions
+    // to filter out colored text that is simply template/standard language.
+    const uploadedTemplate = (playbook.contracts || []).find(
+      c => c.category === "templates" && c.type === reviewDocType && c.text
     );
+    const templateCorpus = [
+      uploadedTemplate?.text || "",
+      ...(playbook.clauses || []).flatMap(c =>
+        [c.standardLang, c.fallbackLang, c.hardLimit].filter(Boolean)
+      )
+    ].join(" ").toLowerCase();
+
     const isTemplateText = (text) => {
-      if (!playbookTexts.length) return false;
+      if (!templateCorpus) return false;
       const t = text.toLowerCase().trim();
-      if (t.length < 10) return false;
-      return playbookTexts.some(pt => pt.includes(t) || t.includes(pt.slice(0, 40)));
+      if (t.length < 8) return false;
+      // Check if this text (or its first 60 chars) appears in the template corpus
+      return templateCorpus.includes(t) || templateCorpus.includes(t.slice(0, 60));
     };
 
     const allAdded = [...coloredTexts, ...trackedInserts].filter(a => !isTemplateText(a.text));
