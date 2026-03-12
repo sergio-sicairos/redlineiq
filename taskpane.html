@@ -305,6 +305,19 @@
     <div id="myname-status" style="margin-top:8px; font-size:11px;"></div>
   </div>
 
+  <div class="card" style="margin-top:10px;">
+    <div class="section-title">Share Playbook</div>
+    <div class="text-xs text-muted" style="margin-bottom:10px;">
+      Export your positions to a file and share it with teammates. They import it once to get your full playbook.
+    </div>
+    <button class="btn btn-secondary btn-full" onclick="exportPlaybook()">↓ Export Playbook</button>
+    <div style="margin-top:8px;">
+      <input type="file" id="import-playbook-input" accept=".json" style="display:none;" onchange="importPlaybook(this)" />
+      <button class="btn btn-secondary btn-full" onclick="document.getElementById('import-playbook-input').click()">↑ Import Playbook</button>
+    </div>
+    <div id="share-playbook-status" style="margin-top:8px; font-size:11px;"></div>
+  </div>
+
 </div>
 
 <!-- Loading screen -->
@@ -339,7 +352,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260312-C</span>
+        <span style="font-size:9px;color:#6b7280;">v20260312-D</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1925,6 +1938,36 @@ async function loadFromDrive() {
     contracts: Array.isArray(re) ? re : [],
     outcomes:  Array.isArray(ou) ? ou : [],
   };
+}
+
+// ── Playbook export / import ──────────────────────────────────────────────────
+function exportPlaybook() {
+  const data = JSON.stringify(playbook.clauses || [], null, 2);
+  const blob = new Blob([data], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "pyline-playbook.json"; a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function importPlaybook(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const status = document.getElementById("share-playbook-status");
+  status.textContent = "Importing…"; status.style.color = "#9ca3af";
+  try {
+    const data = JSON.parse(await file.text());
+    if (!Array.isArray(data)) throw new Error("Invalid file — expected a positions array.");
+    await writeDriveFile("playbook.json", data);
+    playbook.clauses = data;
+    renderPlaybookSummary();
+    status.textContent = `✓ Imported ${data.length} positions and saved to Drive.`;
+    status.style.color = "#16a34a";
+  } catch(e) {
+    status.textContent = "✗ " + e.message;
+    status.style.color = "#ef4444";
+  }
+  input.value = "";
 }
 
 async function writeDriveFile(filename, data) {
