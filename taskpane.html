@@ -339,7 +339,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260309-N</span>
+        <span style="font-size:9px;color:#6b7280;">v20260309-O</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -944,11 +944,17 @@ async function startReview() {
       ? await filterAgreementComments(candidateComments)
       : new Set();
 
+    // Pre-filter: skip Added Language items that are just template/standard words
+    const trivialAddedIndices = allAdded.length
+      ? await filterTrivialAdditions(allAdded, templateText)
+      : new Set();
+
     const items = [
       ...candidateComments.filter((_, idx) => !agreementIndices.has(idx))
         .map((c, idx) => ({ type: "Comment", text: c.content || "", anchor: c.anchoredText || "", author: c.author || "", _commentContent: c.content || "", _commentAnchor: c.anchoredText || "", _commentIdx: idx })),
       ...struckTexts.map(t => ({ type: "Removed Language", text: t, anchor: "", author: "" })),
-      ...allAdded.map(a => ({ type: "Added Language", text: a.text, anchor: "", author: "" })),
+      ...allAdded.filter((_, idx) => !trivialAddedIndices.has(idx))
+        .map(a => ({ type: "Added Language", text: a.text, anchor: "", author: "" })),
     ].filter(i => i.text.trim().length > 2);
 
     // Pre-compute section numbers and doc context snippets (pure JS, no API calls)
@@ -1978,6 +1984,24 @@ async function filterAgreementComments(comments) {
   }
 }
 
+// ── Pre-filter: skip Added Language items that are standard template words ─────
+async function filterTrivialAdditions(items, templateText) {
+  if (!items.length) return new Set();
+  try {
+    const tmplExcerpt = templateText ? `Our standard template excerpt:\n"""\n${templateText.slice(0, 600)}\n"""\n\n` : "";
+    const list = items.map((a, i) => `${i}: "${a.text.slice(0, 150)}"`).join("\n");
+    const result = await callClaude(
+      `You are reviewing a list of text fragments detected as "Added Language" in a contract. ${tmplExcerpt}Your job: identify which items are NOT worth reviewing — i.e. they are standard template words, common legal boilerplate already in the template, single words with no material impact, or clearly not a substantive change. Return ONLY a JSON array of the indices to SKIP. Return [] if all should be reviewed. No explanation.`,
+      `Items:\n${list}`,
+      256
+    );
+    const raw = result.match(/\[[\d,\s]*\]/)?.[0] || "[]";
+    return new Set(JSON.parse(raw).filter(n => typeof n === "number"));
+  } catch(_) {
+    return new Set();
+  }
+}
+
 // ── Claude API calls ──────────────────────────────────────────────────────────
 async function callClaude(system, user, maxTokens = 4096) {
   const key = await getApiKey();
@@ -2325,16 +2349,35 @@ async function findParagraphContaining(context, foundText) {
   await context.sync();
   paras.items.forEach(p => p.load("text"));
   await context.sync();
+
+  let foundPara = null;
   for (const p of paras.items) {
-    if (normalizeForSearch(p.text).toLowerCase().includes(needle)) return p;
+    if (normalizeForSearch(p.text).toLowerCase().includes(needle)) { foundPara = p; break; }
   }
-  // Try shorter needle
-  const shortNeedle = needle.slice(0, 30);
-  if (shortNeedle.length < 4) return null;
-  for (const p of paras.items) {
-    if (normalizeForSearch(p.text).toLowerCase().includes(shortNeedle)) return p;
+  if (!foundPara) {
+    const shortNeedle = needle.slice(0, 30);
+    if (shortNeedle.length < 4) return null;
+    for (const p of paras.items) {
+      if (normalizeForSearch(p.text).toLowerCase().includes(shortNeedle)) { foundPara = p; break; }
+    }
   }
-  return null;
+  if (!foundPara) return null;
+
+  // Try to narrow selection to the specific text within the paragraph
+  const snippets = [
+    cleanForWordSearch(normalizeForSearch(foundText).slice(0, 60)),
+    cleanForWordSearch(normalizeForSearch(foundText).slice(0, 40)),
+    cleanForWordSearch(normalizeForSearch(foundText).slice(0, 20)),
+  ].filter(s => s.length >= 3);
+  for (const snippet of snippets) {
+    try {
+      const res = foundPara.search(snippet, { matchCase: false, matchWholeWord: false });
+      res.load("items");
+      await context.sync();
+      if (res.items.length > 0) return res.items[0];
+    } catch(_) {}
+  }
+  return foundPara;
 }
 
 let _navGen = 0;
