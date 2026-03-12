@@ -339,7 +339,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260312-A</span>
+        <span style="font-size:9px;color:#6b7280;">v20260312-B</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1310,20 +1310,10 @@ function getColoredTexts() {
         paras.items.forEach(p => { p.load("text"); p.font.load("color"); });
         await context.sync();
 
-        // Added language = text whose color differs from the document default (black/auto).
-        // Tracked insertions (red+underline from TC) are handled separately via <w:ins> OOXML.
-        // Only flag colors that are typical for change markup — exclude common decorative
-        // colors used in headings/tables (dark greys, navy blues, dark browns, etc.).
+        // Added language = any non-black, non-white, non-auto font color.
         const isAdded = color => {
           const c = (color || "").replace("#","").toLowerCase();
           if (!c || c === "auto" || c === "000000" || c === "ffffff") return false;
-          const r = parseInt(c.slice(0,2), 16);
-          const g = parseInt(c.slice(2,4), 16);
-          const b = parseInt(c.slice(4,6), 16);
-          // Skip near-black colors (common heading/table formatting)
-          if (r < 80 && g < 80 && b < 80) return false;
-          // Skip dark navy/slate (common theme colors in Word templates)
-          if (r < 80 && g < 80 && b < 160 && b > r) return false;
           return true;
         };
 
