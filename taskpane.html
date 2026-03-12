@@ -339,7 +339,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260309-R</span>
+        <span style="font-size:9px;color:#6b7280;">v20260312-A</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1275,7 +1275,20 @@ function getOoxmlChanges() {
           }
         }
 
-        resolve({ struck: [...new Set(struck)], inserted });
+        // Merge consecutive same-color/same-type inserted items into one clause card
+        const mergedIns = [];
+        let curIns = null;
+        for (const item of inserted) {
+          if (curIns && curIns.color === item.color) {
+            curIns.text += "\n" + item.text;
+          } else {
+            if (curIns) mergedIns.push(curIns);
+            curIns = { ...item };
+          }
+        }
+        if (curIns) mergedIns.push(curIns);
+
+        resolve({ struck: [...new Set(struck)], inserted: mergedIns });
       } catch(e) {
         console.warn("OOXML changes detection:", e.message);
         resolve({ struck: [], inserted: [] });
@@ -1355,9 +1368,22 @@ function getColoredTexts() {
           }
         }
 
+        // Merge consecutive same-color paragraph-level items into one clause card
+        const merged = [];
+        let cur = null;
+        for (const item of results) {
+          if (cur && cur.color === item.color) {
+            cur.text += "\n" + item.text;
+          } else {
+            if (cur) merged.push(cur);
+            cur = { ...item };
+          }
+        }
+        if (cur) merged.push(cur);
+
         // Require at least 25 chars — short colored text (headings, labels, hyperlinks)
         // is almost always document formatting, not added contract language.
-        resolve(results.filter(r => r.text.trim().length >= 25));
+        resolve(merged.filter(r => r.text.trim().length >= 25));
       } catch(e) {
         console.warn("Colored text detection:", e.message);
         resolve([]);
