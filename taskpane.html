@@ -352,7 +352,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260312-I</span>
+        <span style="font-size:9px;color:#6b7280;">v20260312-J</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -896,26 +896,19 @@ async function startReview() {
 
   try {
     // 1. Extract document text, comments, and strikethrough in parallel
-    const [rawText, docComments, ooxmlChanges, coloredTexts, tcChanges] = await Promise.all([
-      withTimeout(getDocumentText(),         6000, ""),
-      withTimeout(getDocumentComments(),     4000, []),
-      withTimeout(getOoxmlChanges(),        12000, { struck: [], inserted: [] }),
-      withTimeout(getColoredTexts(),        15000, []),
-      withTimeout(getWordTrackedChanges(),  15000, { inserted: [], deleted: [] }),
+    const [rawText, docComments, docChanges] = await Promise.all([
+      withTimeout(getDocumentText(),       6000, ""),
+      withTimeout(getDocumentComments(),   4000, []),
+      withTimeout(getDocumentChanges(),   20000, { struck: [], inserted: [], coloredTexts: [], tcDeleted: [] }),
     ]);
     if (_reviewCancelled) return;
     docText = rawText;
     lastDocComments = docComments;
 
-    // Manual strikethrough from OOXML (may need struckFiltered pass)
-    const struckTexts = ooxmlChanges.struck;
-    // Tracked deletions (isDeleteRevision) — bypass struckFiltered, they ARE removed
-    const tcDeleted = tcChanges.deleted;
-    // Tracked + colored insertions from all sources
-    const trackedInserts = [
-      ...ooxmlChanges.inserted,
-      ...tcChanges.inserted,
-    ];
+    const struckTexts    = docChanges.struck;
+    const tcDeleted      = docChanges.tcDeleted;
+    const trackedInserts = docChanges.inserted;
+    const coloredTexts   = docChanges.coloredTexts;
 
     // Build a normalized corpus from uploaded template + playbook positions
     // to filter out colored text that is just standard/template language.
@@ -1226,6 +1219,146 @@ function getDocumentText() {
 // ── Word.js native Track Changes detection ────────────────────────────────────
 // Uses isInsertRevision / isDeleteRevision on paragraphs — more reliable than
 // OOXML parsing for standard Track Changes ("Reviewing" mode in Word).
+// ── Consolidated document-change detection ────────────────────────────────────
+// Replaces getOoxmlChanges + getColoredTexts + getWordTrackedChanges.
+// Single Word.run, exactly 2 context.sync calls — no word-level range loading.
+function getDocumentChanges() {
+  return new Promise(resolve => {
+    Word.run(async context => {
+      try {
+        const WNS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+
+        // ── Sync 1: body OOXML + paragraph list ──────────────────────────────
+        const ooxmlProxy = context.document.body.getOoxml();
+        const paras = context.document.body.paragraphs;
+        paras.load("items");
+        await context.sync();
+
+        // ── Sync 2: paragraph text, color, TC flags ──────────────────────────
+        paras.items.forEach(p => {
+          p.load("text,isInsertRevision,isDeleteRevision");
+          p.font.load("color");
+        });
+        await context.sync();
+
+        // ── A. OOXML-based detection (manual strike, colored runs, <w:ins>/<w:del>) ──
+        const struck = [];
+        const ooxmlInserted = [];
+        const xml = ooxmlProxy.value || "";
+
+        if (xml) {
+          const xmlDoc = new DOMParser().parseFromString(xml, "text/xml");
+
+          const hasStrike = run => {
+            const rPr = run.getElementsByTagNameNS(WNS, "rPr")[0];
+            if (!rPr) return false;
+            return [...rPr.getElementsByTagNameNS(WNS, "strike"), ...rPr.getElementsByTagNameNS(WNS, "dstrike")]
+              .some(el => { const v = el.getAttribute("w:val") || el.getAttributeNS(WNS, "val") || ""; return v !== "false" && v !== "0"; });
+          };
+          const getRunColor = run => {
+            const rPr = run.getElementsByTagNameNS(WNS, "rPr")[0];
+            if (!rPr) return null;
+            const colorEl = rPr.getElementsByTagNameNS(WNS, "color")[0];
+            if (!colorEl) return null;
+            const val = (colorEl.getAttribute("w:val") || colorEl.getAttributeNS(WNS, "val") || "").toLowerCase();
+            if (val && val !== "auto" && val !== "000000" && val !== "ffffff") return val;
+            const theme = (colorEl.getAttribute("w:themeColor") || colorEl.getAttributeNS(WNS, "themeColor") || "").toLowerCase();
+            return (theme && (theme.startsWith("accent") || theme === "hyperlink")) ? theme : null;
+          };
+
+          for (const para of xmlDoc.getElementsByTagNameNS(WNS, "p")) {
+            const isInIns = node => {
+              let el = node.parentNode;
+              while (el && el !== para) { if (el.localName === "ins") return true; el = el.parentNode; }
+              return false;
+            };
+            let sBuf = [], cBuf = [], cVal = null;
+            const flushS = () => { if (!sBuf.length) return; const t = sBuf.join("").trim(); if (t.length > 3) struck.push(t); sBuf = []; };
+            const flushC = () => { if (!cBuf.length) return; const t = cBuf.join("").trim(); if (t.length > 1) ooxmlInserted.push({ text: t, color: cVal || "colored" }); cBuf = []; cVal = null; };
+
+            for (const run of para.getElementsByTagNameNS(WNS, "r")) {
+              if (isInIns(run)) continue;
+              const tEl = run.getElementsByTagNameNS(WNS, "t")[0] || run.getElementsByTagNameNS(WNS, "delText")[0];
+              const text = tEl ? tEl.textContent : "";
+              const isDel = !!run.getElementsByTagNameNS(WNS, "delText")[0];
+              const isStruck = hasStrike(run) || isDel;
+              const rc = getRunColor(run);
+              if (isStruck && text) {
+                flushC();
+                if (rc && !isDel) { flushS(); if (text.trim().length > 20) ooxmlInserted.push({ text: text.trim(), color: "colored-strike" }); }
+                else sBuf.push(text);
+              } else if (rc && text) {
+                flushS();
+                if (!cVal || rc === cVal) { cBuf.push(text); cVal = rc; }
+                else { flushC(); cBuf.push(text); cVal = rc; }
+              } else { flushS(); flushC(); }
+            }
+            flushS(); flushC();
+
+            for (const ins of para.getElementsByTagNameNS(WNS, "ins")) {
+              const ts = [];
+              for (const r of ins.getElementsByTagNameNS(WNS, "r")) { const t = r.getElementsByTagNameNS(WNS, "t")[0]; if (t && t.textContent) ts.push(t.textContent); }
+              const c = ts.join("").trim();
+              if (c.length > 1) ooxmlInserted.push({ text: c, color: "tracked" });
+            }
+          }
+        }
+
+        // ── B. Paragraph-level: font color + TC insert/delete flags ──────────
+        const isColorAdded = color => { const c = (color || "").replace("#", "").toLowerCase(); return c && c !== "auto" && c !== "000000" && c !== "ffffff"; };
+        const coloredTexts = [];
+        const tcInserted = [];
+        const tcDeleted = [];
+        let curIns = null, curDel = null, cBuf2 = null, cBufColor = null;
+
+        for (const p of paras.items) {
+          const txt = p.text.trim();
+          if (!txt) continue;
+          if (p.isInsertRevision) {
+            curIns = curIns !== null ? curIns + "\n" + txt : txt;
+            if (curDel !== null) { tcDeleted.push(curDel); curDel = null; }
+            if (cBuf2 !== null) { coloredTexts.push({ text: cBuf2, color: cBufColor }); cBuf2 = null; cBufColor = null; }
+          } else if (p.isDeleteRevision) {
+            curDel = curDel !== null ? curDel + "\n" + txt : txt;
+            if (curIns !== null) { tcInserted.push({ text: curIns, color: "tracked" }); curIns = null; }
+            if (cBuf2 !== null) { coloredTexts.push({ text: cBuf2, color: cBufColor }); cBuf2 = null; cBufColor = null; }
+          } else if (isColorAdded(p.font.color)) {
+            const c = (p.font.color || "").toLowerCase();
+            if (cBufColor === c) { cBuf2 = cBuf2 !== null ? cBuf2 + "\n" + txt : txt; }
+            else { if (cBuf2 !== null) coloredTexts.push({ text: cBuf2, color: cBufColor }); cBuf2 = txt; cBufColor = c; }
+            if (curIns !== null) { tcInserted.push({ text: curIns, color: "tracked" }); curIns = null; }
+            if (curDel !== null) { tcDeleted.push(curDel); curDel = null; }
+          } else {
+            if (curIns !== null) { tcInserted.push({ text: curIns, color: "tracked" }); curIns = null; }
+            if (curDel !== null) { tcDeleted.push(curDel); curDel = null; }
+            if (cBuf2 !== null) { coloredTexts.push({ text: cBuf2, color: cBufColor }); cBuf2 = null; cBufColor = null; }
+          }
+        }
+        if (curIns !== null) tcInserted.push({ text: curIns, color: "tracked" });
+        if (curDel !== null) tcDeleted.push(curDel);
+        if (cBuf2 !== null) coloredTexts.push({ text: cBuf2, color: cBufColor });
+
+        // ── C. Merge consecutive same-color inserted items ────────────────────
+        const allIns = [...ooxmlInserted, ...tcInserted];
+        const mergedIns = [];
+        let curM = null;
+        for (const item of allIns) {
+          if (curM && curM.color === item.color) curM.text += "\n" + item.text;
+          else { if (curM) mergedIns.push(curM); curM = { ...item }; }
+        }
+        if (curM) mergedIns.push(curM);
+
+        resolve({ struck: [...new Set(struck)], inserted: mergedIns, coloredTexts, tcDeleted });
+      } catch(e) {
+        console.warn("Document changes:", e.message);
+        resolve({ struck: [], inserted: [], coloredTexts: [], tcDeleted: [] });
+      }
+    }).catch(() => resolve({ struck: [], inserted: [], coloredTexts: [], tcDeleted: [] }));
+  });
+}
+
+// Legacy stubs — kept so any stray references don't crash; all detection
+// is now handled by getDocumentChanges() above.
 function getWordTrackedChanges() {
   return new Promise(resolve => {
     Word.run(async context => {
