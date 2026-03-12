@@ -339,7 +339,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260312-B</span>
+        <span style="font-size:9px;color:#6b7280;">v20260312-C</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1317,22 +1317,24 @@ function getColoredTexts() {
           return true;
         };
 
+        // Track document index so results stay in order after deep scan
         const results = [];
-        const needsDeepScan = [];
+        const needsDeepScan = []; // { para, idx }
 
-        for (const p of paras.items) {
+        for (let i = 0; i < paras.items.length; i++) {
+          const p = paras.items[i];
           if (!p.text.trim() || p.text.trim().length < 3) continue;
           if (isAdded(p.font.color)) {
-            results.push({ text: p.text.trim(), color: p.font.color });
+            results.push({ text: p.text.trim(), color: p.font.color, _idx: i });
           } else {
-            needsDeepScan.push(p);
+            needsDeepScan.push({ para: p, idx: i });
           }
         }
 
-        // Batch word-level scan for paragraphs that may have partial coloring (cap at 60)
+        // Word-level scan for paragraphs with partial coloring (no cap)
         if (needsDeepScan.length) {
-          const splitRanges = needsDeepScan.slice(0, 60).map(p => {
-            const r = p.getTextRanges([" ", "\t"], true);
+          const splitRanges = needsDeepScan.map(({ para }) => {
+            const r = para.getTextRanges([" ", "\t"], true);
             r.load("items");
             return r;
           });
@@ -1343,22 +1345,27 @@ function getColoredTexts() {
           }));
           await context.sync();
 
-          for (const ranges of splitRanges) {
+          for (let j = 0; j < splitRanges.length; j++) {
+            const ranges = splitRanges[j];
+            const docIdx = needsDeepScan[j].idx;
             let group = [], groupColor = null;
             for (const r of ranges.items) {
               if (isAdded(r.font.color) && r.text.trim()) {
                 const c = (r.font.color || "").replace("#","").toLowerCase();
                 if (!groupColor || c === groupColor) { group.push(r.text); groupColor = c; }
-                else { if (group.length) results.push({ text: group.join(" ").trim(), color: groupColor }); group = [r.text]; groupColor = c; }
+                else { if (group.length) results.push({ text: group.join(" ").trim(), color: groupColor, _idx: docIdx }); group = [r.text]; groupColor = c; }
               } else {
-                if (group.length) { results.push({ text: group.join(" ").trim(), color: groupColor }); group = []; groupColor = null; }
+                if (group.length) { results.push({ text: group.join(" ").trim(), color: groupColor, _idx: docIdx }); group = []; groupColor = null; }
               }
             }
-            if (group.length) results.push({ text: group.join(" ").trim(), color: groupColor });
+            if (group.length) results.push({ text: group.join(" ").trim(), color: groupColor, _idx: docIdx });
           }
         }
 
-        // Merge consecutive same-color paragraph-level items into one clause card
+        // Sort by document position before merging
+        results.sort((a, b) => a._idx - b._idx);
+
+        // Merge consecutive same-color items into one clause card
         const merged = [];
         let cur = null;
         for (const item of results) {
