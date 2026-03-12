@@ -330,7 +330,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260309-E</span>
+        <span style="font-size:9px;color:#6b7280;">v20260309-F</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -2251,6 +2251,28 @@ async function findClauseRange(context, foundText) {
   return null;
 }
 
+// Fallback for Added Language: scan paragraphs for one containing the target text.
+// body.search() can't reliably find text inside <w:ins> tracked insertions or colored runs.
+async function findParagraphContaining(context, foundText) {
+  const needle = normalizeForSearch(foundText).toLowerCase().slice(0, 80);
+  if (needle.length < 4) return null;
+  const paras = context.document.body.paragraphs;
+  paras.load("items");
+  await context.sync();
+  paras.items.forEach(p => p.load("text"));
+  await context.sync();
+  for (const p of paras.items) {
+    if (normalizeForSearch(p.text).toLowerCase().includes(needle)) return p;
+  }
+  // Try shorter needle
+  const shortNeedle = needle.slice(0, 30);
+  if (shortNeedle.length < 4) return null;
+  for (const p of paras.items) {
+    if (normalizeForSearch(p.text).toLowerCase().includes(shortNeedle)) return p;
+  }
+  return null;
+}
+
 let _navGen = 0;
 function cardClick(event, idx) {
   // Ignore clicks on interactive children
@@ -2294,7 +2316,10 @@ function cardClick(event, idx) {
   if (!searchText.trim()) return;
 
   Word.run(async (context) => {
-    const range = await findClauseRange(context, searchText);
+    let range = await findClauseRange(context, searchText);
+    if (!range && c._signalType === "Added Language") {
+      range = await findParagraphContaining(context, searchText);
+    }
     if (!range) return;
     range.select();
     await context.sync();
@@ -2311,7 +2336,10 @@ function navigateToClause(idx) {
   if (card) card.classList.add("nav-active");
 
   Word.run(async (context) => {
-    const range = await findClauseRange(context, foundText);
+    let range = await findClauseRange(context, foundText);
+    if (!range && clause._signalType === "Added Language") {
+      range = await findParagraphContaining(context, foundText);
+    }
     if (!range) return;
     range.select();
     await context.sync();
