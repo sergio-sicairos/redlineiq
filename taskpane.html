@@ -339,7 +339,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260309-M</span>
+        <span style="font-size:9px;color:#6b7280;">v20260309-N</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -911,7 +911,7 @@ async function startReview() {
     const isTemplateText = (text) => {
       if (!templateCorpus.length) return false;
       const t = _normForFilter(text);
-      if (t.length < 8) return false;
+      if (t.length < 3) return false;
       // Exact match
       if (templateCorpus.includes(t)) return true;
       // Sliding window: if any 30-char chunk of detected text appears in template, skip it
@@ -1263,7 +1263,7 @@ function getOoxmlChanges() {
               if (tEl && tEl.textContent) texts.push(tEl.textContent);
             }
             const combined = texts.join("").trim();
-            if (combined.length > 3) inserted.push({ text: combined, color: "tracked" });
+            if (combined.length > 1) inserted.push({ text: combined, color: "tracked" });
           }
         }
 
