@@ -341,7 +341,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260309-K</span>
+        <span style="font-size:9px;color:#6b7280;">v20260309-L</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -916,24 +916,39 @@ async function startReview() {
     const struckTexts   = ooxmlChanges.struck;
     const trackedInserts = ooxmlChanges.inserted;
 
-    // Build a normalized text corpus from the uploaded template + playbook positions
-    // to filter out colored text that is simply template/standard language.
+    // Build a normalized corpus from uploaded template + playbook positions
+    // to filter out colored text that is just standard/template language.
     const uploadedTemplate = (playbook.contracts || []).find(
       c => c.category === "templates" && c.type === reviewDocType && c.text
     );
-    const templateCorpus = [
+    const _normForFilter = s => s.toLowerCase()
+      .replace(/[\u2018\u2019\u02BC]/g, "'")
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/\u00A0/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const templateCorpus = _normForFilter([
       uploadedTemplate?.text || "",
       ...(playbook.clauses || []).flatMap(c =>
         [c.standardLang, c.fallbackLang, c.hardLimit].filter(Boolean)
       )
-    ].join(" ").toLowerCase();
+    ].join(" "));
 
     const isTemplateText = (text) => {
-      if (!templateCorpus) return false;
-      const t = text.toLowerCase().trim();
+      if (!templateCorpus.length) return false;
+      const t = _normForFilter(text);
       if (t.length < 8) return false;
-      // Check if this text (or its first 60 chars) appears in the template corpus
-      return templateCorpus.includes(t) || templateCorpus.includes(t.slice(0, 60));
+      // Exact match
+      if (templateCorpus.includes(t)) return true;
+      // Sliding window: if any 30-char chunk of detected text appears in template, skip it
+      const windowSize = 30;
+      if (t.length >= windowSize) {
+        for (let i = 0; i <= t.length - windowSize; i += 15) {
+          if (templateCorpus.includes(t.slice(i, i + windowSize))) return true;
+        }
+      }
+      return false;
     };
 
     const allAdded = [...coloredTexts, ...trackedInserts].filter(a => !isTemplateText(a.text));
@@ -1252,7 +1267,7 @@ function getOoxmlChanges() {
                   if (combined.length > 3) struck.push(combined);
                   strikeBuffer = [];
                 }
-                if (text.trim().length > 3) inserted.push({ text: text.trim(), color: "colored-strike" });
+                if (text.trim().length > 20) inserted.push({ text: text.trim(), color: "colored-strike" });
               } else {
                 strikeBuffer.push(text);
               }
@@ -1359,9 +1374,9 @@ function getColoredTexts() {
           }
         }
 
-        // Require at least 2 words — single-word colored text is almost always
-        // a section heading (e.g. "Indemnification"), not added contract language.
-        resolve(results.filter(r => r.text.trim().includes(" ")));
+        // Require at least 25 chars — short colored text (headings, labels, hyperlinks)
+        // is almost always document formatting, not added contract language.
+        resolve(results.filter(r => r.text.trim().length >= 25));
       } catch(e) {
         console.warn("Colored text detection:", e.message);
         resolve([]);
