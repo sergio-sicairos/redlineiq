@@ -352,7 +352,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260312-F</span>
+        <span style="font-size:9px;color:#6b7280;">v20260312-G</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -747,6 +747,12 @@ Office.onReady(async (info) => {
     document.getElementById("main").style.display = "block";
     show("view-idle");
   }
+  // Reverse navigation: clicking in the document highlights the matching clause card
+  Office.context.document.addHandlerAsync(
+    Office.EventType.DocumentSelectionChanged,
+    onDocSelectionChanged
+  );
+
   // Load Drive in background — updates banner when done
   bootLoadDrive();
 });
@@ -2572,6 +2578,51 @@ function navigateToSection(sectionRef) {
     await context.sync();
     if (res.items.length > 0) { res.items[0].select(); await context.sync(); }
   }).catch(e => console.warn("Could not navigate to section:", e.message));
+}
+
+// ── Reverse navigation: doc selection → clause card ──────────────────────────
+let _selDebounce = null;
+function onDocSelectionChanged() {
+  clearTimeout(_selDebounce);
+  _selDebounce = setTimeout(async () => {
+    if (!reviewClauses.length) return;
+    try {
+      await Word.run(async context => {
+        const sel = context.document.getSelection();
+        sel.load("text");
+        await context.sync();
+        const selText = sel.text.trim();
+        if (selText.length < 10) return;
+
+        const norm = s => s.toLowerCase().replace(/[\s\u00A0]+/g, " ").trim();
+        const normSel = norm(selText);
+
+        let bestIdx = -1, bestScore = 0;
+        for (let i = 0; i < reviewClauses.length; i++) {
+          const c = reviewClauses[i];
+          const haystack = norm(c._commentContent || c._commentAnchor || c.found || "");
+          if (!haystack) continue;
+          const shorter = normSel.length < haystack.length ? normSel : haystack;
+          const longer  = normSel.length < haystack.length ? haystack : normSel;
+          if (!longer.includes(shorter)) continue;
+          const score = shorter.length / longer.length;
+          if (score > bestScore) { bestScore = score; bestIdx = i; }
+        }
+
+        if (bestIdx >= 0 && bestScore >= 0.25) {
+          scrollToCard(bestIdx);
+        }
+      });
+    } catch(_) {}
+  }, 400);
+}
+
+function scrollToCard(idx) {
+  document.querySelectorAll(".clause-card").forEach(el => el.classList.remove("nav-active"));
+  const card = document.getElementById("clause-" + idx);
+  if (!card) return;
+  card.classList.add("nav-active");
+  card.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 // ── Position Distillation ─────────────────────────────────────────────────────
