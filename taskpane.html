@@ -341,7 +341,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260309-H</span>
+        <span style="font-size:9px;color:#6b7280;">v20260309-I</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -987,6 +987,12 @@ async function startReview() {
       `[${c.category}]: Standard: ${anonymizeForAI(c.standardLang||"").slice(0,150)}${c.fallbackLang ? ` | Fallback: ${anonymizeForAI(c.fallbackLang).slice(0,100)}` : ""}${c.hardLimit ? ` | Hard Limit: ${anonymizeForAI(c.hardLimit).slice(0,80)}` : ""}`
     ).join("\n");
 
+    // Find the matching template for this doc type (used as primary comparison baseline)
+    const matchingTemplate = (playbook.contracts || []).find(
+      c => c.category === "templates" && c.type === reviewDocType && c.text
+    );
+    const templateText = matchingTemplate?.text || "";
+
     // 4. Review items in batches of 3 to avoid rate limits
     let completed = 0;
     setStep(`Analyzing 0 of ${items.length}…`);
@@ -995,9 +1001,9 @@ async function startReview() {
     for (let i = 0; i < items.length; i += BATCH) {
       const batch = items.slice(i, i + BATCH);
       const results = await Promise.all(batch.map(async item => {
-        let clause = await withTimeout(reviewSingleItem(item, posCtx, reviewDocType), 45000, null);
+        let clause = await withTimeout(reviewSingleItem(item, posCtx, reviewDocType, templateText), 45000, null);
         // One retry on timeout
-        if (!clause) clause = await withTimeout(reviewSingleItem(item, posCtx, reviewDocType), 45000, null);
+        if (!clause) clause = await withTimeout(reviewSingleItem(item, posCtx, reviewDocType, templateText), 45000, null);
         completed++;
         setStep(`Analyzing ${completed} of ${items.length}…`);
         if (!clause) return {
@@ -1073,29 +1079,44 @@ async function startReview() {
 }
 
 // ── Per-item targeted AI review ──────────────────────────────────────────────
-async function reviewSingleItem(item, posCtx, docType) {
+// Extract a relevant window of template text around the found text
+function getTemplateContext(templateText, foundText, windowSize = 700) {
+  if (!templateText) return "";
+  const needle = (foundText || "").toLowerCase().slice(0, 80);
+  const idx = needle.length >= 10 ? templateText.toLowerCase().indexOf(needle) : -1;
+  if (idx !== -1) {
+    const start = Math.max(0, idx - 250);
+    const end = Math.min(templateText.length, idx + windowSize);
+    return templateText.slice(start, end);
+  }
+  // Fallback: return first 700 chars of template as general context
+  return templateText.slice(0, 700);
+}
+
+async function reviewSingleItem(item, posCtx, docType, templateText = "") {
+  const templateSection = getTemplateContext(templateText, item.text);
+
   // Direction-aware decision logic depends on signal type
   const decisionLogic = item.type === "Removed Language"
-    ? `This text is being DELETED (strikethrough) by the counterparty. Evaluate whether removing it is acceptable TO US.
-- If this text is our standard/template language or favorable to us → "reject"; suggestedLanguage = the original text verbatim (we want it restored)
-- If this text is unfavorable to us and its removal benefits us → "accept"
-- If partially acceptable or ambiguous → "negotiate"; suggestedLanguage = the revised version of the text we would accept keeping (required — never leave empty when negotiating)`
+    ? `This text is being DELETED (strikethrough) by the counterparty.
+STEP 1 — Template check: Does this text appear in our standard template above? If yes, it must be restored → "reject"; suggestedLanguage = the original text verbatim.
+STEP 2 — If not in template: Does removing it benefit us? → "accept". Is it ambiguous? → "negotiate"; suggestedLanguage = the revised version we'd accept keeping.`
     : item.type === "Added Language"
-    ? `This text is being ADDED by the counterparty. Evaluate whether this addition is acceptable.
-- Text triggers a Hard Limit → "reject"
-- Text outside Standard but Fallback covers it → "negotiate"; suggestedLanguage = our Standard
-- Text worse than Fallback → "reject"
-- Text within Standard or favorable to us → "accept"
-- No position for this category → judge severity: minor = "accept", material = "negotiate", egregious = "reject"`
+    ? `This text is being ADDED by the counterparty.
+STEP 1 — Template check: Does our standard template already contain equivalent language? If yes and the added text is consistent → "accept".
+STEP 2 — If it deviates from the template: Does it trigger a Hard Limit → "reject". Does Fallback cover it → "negotiate"; suggestedLanguage = our Standard. Worse than Fallback → "reject". No position exists → judge severity: minor = "accept", material = "negotiate", egregious = "reject".`
     : /* Comment */
-    `A reviewer has flagged a concern via this comment. Evaluate the underlying issue in the contract.
-- If it flags a Hard Limit violation → "reject"
-- If it flags something negotiable → "negotiate"
-- If the concern is minor or already acceptable → "accept"`;
+    `A reviewer has flagged a concern via this comment.
+STEP 1 — Template check: Does our standard template already address this concern adequately? If yes → "accept".
+STEP 2 — If it's a real gap: Hard Limit violation → "reject". Negotiable → "negotiate". Minor → "accept".`;
 
-  const sys = `You are a contract clause reviewer for ${docType} agreements.
+  const templateBlock = templateSection
+    ? `OUR STANDARD ${docType} TEMPLATE (reference section):\n"""\n${templateSection}\n"""\n\n`
+    : "";
 
-OUR POSITIONS — calibrate every recommendation against these:
+  const sys = `You are a contract clause reviewer for ${docType} agreements. Use a two-step process: first compare against our template, then apply our positions.
+
+${templateBlock}OUR POSITIONS — use after template comparison to calibrate recommendations:
 ${posCtx || "None loaded."}
 
 ${decisionLogic}
@@ -1103,7 +1124,7 @@ ${decisionLogic}
 Never include company names in output — use "the counterparty", "the customer", "the vendor".
 "sectionRef" must be a section number (e.g. "8.3"), exhibit (e.g. "Exhibit A"), or schedule (e.g. "Schedule 1") — whatever heading precedes this text. Leave blank if not identifiable.
 "source" must be exactly one of: "Hard Limit" (violates a must-have position), "Standard Template" (deviates from our standard language), "Playbook Preference" (softer fallback position applies), "Rewording" (counterparty restating without substantive change), "Novel Language" (no playbook position covers this).
-"reasoning" must always be populated — cover what specifically deviates from our template/positions AND why you made this recommendation in one combined explanation. Never leave it empty.
+"reasoning" must always be populated — explain what deviates from the template/positions and why you made this recommendation. Never leave it empty.
 "suggestedLanguage" must always be populated when recommendation is "negotiate". Never leave it empty for a negotiate recommendation.
 Return JSON only: {"category":"","sectionRef":"","found":"","recommendation":"accept|negotiate|reject","reasoning":"","suggestedLanguage":"","source":""}`;
 
@@ -2702,12 +2723,15 @@ function _buildAskContext() {
     `[${c.category}]: Standard: ${(c.standardLang||"").slice(0,150)}${c.fallbackLang ? ` | Fallback: ${c.fallbackLang.slice(0,100)}` : ""}${c.hardLimit ? ` | Hard Limit: ${c.hardLimit.slice(0,80)}` : ""}`
   ).join("\n");
 
+  const tmpl = (playbook.contracts||[]).find(c => c.category === "templates" && c.type === reviewDocType && c.text);
+  const templateSnippet = tmpl ? `\nSTANDARD ${reviewDocType} TEMPLATE (excerpt):\n${tmpl.text.slice(0,800)}\n` : "";
+
   const reviewCtx = reviewClauses.length
     ? reviewClauses.map((c,i) => `${i+1}. [${c._signalType||c.category}] ${c.recommendation?.toUpperCase()} — ${(c.found||"").slice(0,120)}`).join("\n")
     : "No review in progress.";
 
   return `You are a contract review assistant${reviewDocType ? ` specializing in ${reviewDocType} agreements` : ""}.
-
+${templateSnippet}
 OUR PLAYBOOK POSITIONS:
 ${posCtx || "None loaded."}
 
