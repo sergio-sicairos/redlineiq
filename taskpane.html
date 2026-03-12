@@ -318,6 +318,15 @@
     <div id="share-playbook-status" style="margin-top:8px; font-size:11px;"></div>
   </div>
 
+  <div class="card" style="margin-top:10px;">
+    <div class="section-title">Debug Scanner</div>
+    <div class="text-xs text-muted" style="margin-bottom:10px;">
+      Run this on the open document and share the output to help diagnose detection issues.
+    </div>
+    <button class="btn btn-secondary btn-full" onclick="runDebugScan()">Run Debug Scan</button>
+    <pre id="debug-output" style="margin-top:10px;font-size:9px;color:#9ca3af;white-space:pre-wrap;word-break:break-all;background:rgba(0,0,0,0.3);padding:8px;border-radius:3px;display:none;max-height:300px;overflow-y:auto;"></pre>
+  </div>
+
 </div>
 
 <!-- Loading screen -->
@@ -352,7 +361,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260312-J</span>
+        <span style="font-size:9px;color:#6b7280;">v20260312-K</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -2221,6 +2230,79 @@ async function loadFromDrive() {
 }
 
 // ── Playbook export / import ──────────────────────────────────────────────────
+async function runDebugScan() {
+  const out = document.getElementById("debug-output");
+  out.style.display = "block";
+  out.textContent = "Scanning…";
+  try {
+    await Word.run(async context => {
+      const ooxmlProxy = context.document.body.getOoxml();
+      const paras = context.document.body.paragraphs;
+      paras.load("items");
+      await context.sync();
+
+      paras.items.forEach(p => {
+        p.load("text,isInsertRevision,isDeleteRevision");
+        p.font.load("color");
+      });
+      await context.sync();
+
+      const xml = ooxmlProxy.value || "";
+      const lines = [];
+
+      // OOXML tag check
+      lines.push("=== OOXML tag presence ===");
+      lines.push("Has <w:ins>: " + (xml.includes("w:ins") ? "YES" : "NO"));
+      lines.push("Has <w:del>: " + (xml.includes("w:del") ? "YES" : "NO"));
+      lines.push("Has <w:strike>: " + (xml.includes("w:strike") ? "YES" : "NO"));
+      lines.push("OOXML length: " + xml.length + " chars");
+      lines.push("");
+
+      // First 400 chars of OOXML for context
+      lines.push("=== OOXML snippet (first 400 chars) ===");
+      lines.push(xml.slice(0, 400));
+      lines.push("");
+
+      // Paragraph summary
+      const insertParas = paras.items.filter(p => p.isInsertRevision);
+      const deleteParas = paras.items.filter(p => p.isDeleteRevision);
+      const colorParas  = paras.items.filter(p => {
+        const c = (p.font.color || "").replace("#","").toLowerCase();
+        return c && c !== "auto" && c !== "000000" && c !== "ffffff";
+      });
+
+      lines.push("=== Paragraph flags ===");
+      lines.push("Total paragraphs: " + paras.items.length);
+      lines.push("isInsertRevision=true: " + insertParas.length);
+      lines.push("isDeleteRevision=true: " + deleteParas.length);
+      lines.push("Non-black font color: " + colorParas.length);
+      lines.push("");
+
+      if (insertParas.length) {
+        lines.push("=== Sample inserted paragraphs (up to 3) ===");
+        insertParas.slice(0, 3).forEach(p => lines.push("  » " + p.text.trim().slice(0, 100)));
+        lines.push("");
+      }
+      if (colorParas.length) {
+        lines.push("=== Sample colored paragraphs (up to 3) ===");
+        colorParas.slice(0, 3).forEach(p => lines.push("  color=" + p.font.color + " » " + p.text.trim().slice(0, 80)));
+        lines.push("");
+      }
+
+      // Show first w:ins snippet from OOXML if present
+      if (xml.includes("w:ins")) {
+        const idx = xml.indexOf("w:ins");
+        lines.push("=== First w:ins context (±200 chars) ===");
+        lines.push(xml.slice(Math.max(0, idx - 50), idx + 200));
+      }
+
+      out.textContent = lines.join("\n");
+    });
+  } catch(e) {
+    out.textContent = "Error: " + e.message;
+  }
+}
+
 function exportPlaybook() {
   const data = JSON.stringify(playbook.clauses || [], null, 2);
   const blob = new Blob([data], { type: "application/json" });
