@@ -138,12 +138,23 @@
     .spinner {
       width:60px; height:60px; display:inline-block; object-fit:contain;
     }
-    @keyframes phraseGlow {
-      0%, 100% { text-shadow: 0 0 6px rgba(255,255,255,0.3), 0 0 14px rgba(255,255,255,0.1); opacity: 0.75; }
-      50%       { text-shadow: 0 0 12px rgba(255,255,255,0.7), 0 0 24px rgba(255,255,255,0.3); opacity: 1; }
+    @keyframes marqueeShine {
+      0%   { background-position: -200% center; }
+      100% { background-position: 200% center; }
     }
     #review-phrase.glowing {
-      animation: phraseGlow 1.8s ease-in-out infinite;
+      background: linear-gradient(90deg,
+        #666666 0%,
+        #666666 30%,
+        #ffffff 50%,
+        #666666 70%,
+        #666666 100%
+      );
+      background-size: 200% auto;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: marqueeShine 1.6s linear infinite;
     }
     #loading-screen {
       flex:1; display:flex; flex-direction:column;
@@ -330,7 +341,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260309-F</span>
+        <span style="font-size:9px;color:#6b7280;">v20260309-G</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
