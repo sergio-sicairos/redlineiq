@@ -352,7 +352,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260312-G</span>
+        <span style="font-size:9px;color:#6b7280;">v20260312-H</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -896,17 +896,26 @@ async function startReview() {
 
   try {
     // 1. Extract document text, comments, and strikethrough in parallel
-    const [rawText, docComments, ooxmlChanges, coloredTexts] = await Promise.all([
-      withTimeout(getDocumentText(),    6000, ""),
-      withTimeout(getDocumentComments(),4000, []),
-      withTimeout(getOoxmlChanges(),   12000, { struck: [], inserted: [] }),
-      withTimeout(getColoredTexts(),   15000, []),
+    const [rawText, docComments, ooxmlChanges, coloredTexts, tcChanges] = await Promise.all([
+      withTimeout(getDocumentText(),         6000, ""),
+      withTimeout(getDocumentComments(),     4000, []),
+      withTimeout(getOoxmlChanges(),        12000, { struck: [], inserted: [] }),
+      withTimeout(getColoredTexts(),        15000, []),
+      withTimeout(getWordTrackedChanges(),   8000, { inserted: [], deleted: [] }),
     ]);
     if (_reviewCancelled) return;
     docText = rawText;
     lastDocComments = docComments;
-    const struckTexts   = ooxmlChanges.struck;
-    const trackedInserts = ooxmlChanges.inserted;
+
+    // Manual strikethrough from OOXML (may need struckFiltered pass)
+    const struckTexts = ooxmlChanges.struck;
+    // Tracked deletions (isDeleteRevision) — bypass struckFiltered, they ARE removed
+    const tcDeleted = tcChanges.deleted;
+    // Tracked + colored insertions from all sources
+    const trackedInserts = [
+      ...ooxmlChanges.inserted,
+      ...tcChanges.inserted,
+    ];
 
     // Build a normalized corpus from uploaded template + playbook positions
     // to filter out colored text that is just standard/template language.
@@ -947,21 +956,25 @@ async function startReview() {
       .filter(a => !isTemplateText(a.text))
       .filter((a, i, arr) => arr.findIndex(b => _normForFilter(b.text) === _normForFilter(a.text)) === i);
 
-    // Filter out struck text that still appears in the document body —
-    // body.text is the final state (deletions excluded), so if a "struck" word
-    // is still present it's a false positive from the OOXML parser.
+    // Filter manual strikethrough false-positives — if the struck text still appears
+    // in body.text it was likely decorative formatting, not an actual removal.
     const rawTextLower = rawText.toLowerCase();
-    const struckFiltered = struckTexts.filter(t => {
+    const struckManualFiltered = struckTexts.filter(t => {
       const norm = _normForFilter(t);
-      // Only drop short items still present in the doc — long removals are specific
-      // enough that even if the phrase appears elsewhere, reviewing them is correct.
       if (norm.length < 30 && rawTextLower.includes(norm)) return false;
       return true;
     });
+    // Tracked deletions (isDeleteRevision) are definitively removed — no false-positive
+    // filter needed. Deduplicate against manual strikethrough.
+    const tcDeletedNorms = new Set(tcDeleted.map(t => _normForFilter(t)));
+    const struckFiltered = [
+      ...struckManualFiltered.filter(t => !tcDeletedNorms.has(_normForFilter(t))),
+      ...tcDeleted,
+    ];
 
     if (!docText.trim()) { alert("Document appears to be empty."); show("view-idle"); return; }
 
-    const scanLabel = `Analyzing ${reviewDocType}${docComments.length ? ` + ${docComments.length} comment${docComments.length>1?"s":""}` : ""}${struckTexts.length ? ` + ${struckTexts.length} strikethrough` : ""}${allAdded.length ? ` + ${allAdded.length} added` : ""}…`;
+    const scanLabel = `Analyzing ${reviewDocType}${docComments.length ? ` + ${docComments.length} comment${docComments.length>1?"s":""}` : ""}${struckFiltered.length ? ` + ${struckFiltered.length} removal${struckFiltered.length>1?"s":""}` : ""}${allAdded.length ? ` + ${allAdded.length} added` : ""}…`;
     setStep(scanLabel);
     await new Promise(r => setTimeout(r, 50));
 
@@ -1210,6 +1223,50 @@ function getDocumentText() {
 // ── Extract strikethrough + tracked insertions via a single OOXML fetch ───────
 // Combined to avoid fetching OOXML twice and to reliably detect <w:ins> tags
 // regardless of Word.js API version (getTrackedChanges() requires v1.6+).
+// ── Word.js native Track Changes detection ────────────────────────────────────
+// Uses isInsertRevision / isDeleteRevision on paragraphs — more reliable than
+// OOXML parsing for standard Track Changes ("Reviewing" mode in Word).
+function getWordTrackedChanges() {
+  return new Promise(resolve => {
+    Word.run(async context => {
+      try {
+        const paras = context.document.body.paragraphs;
+        paras.load("items");
+        await context.sync();
+        paras.items.forEach(p => p.load("text,isInsertRevision,isDeleteRevision"));
+        await context.sync();
+
+        const inserted = [];
+        const deleted  = [];
+        let curIns = null, curDel = null;
+
+        for (const p of paras.items) {
+          const txt = p.text.trim();
+          if (p.isInsertRevision && txt) {
+            // Merge consecutive inserted paragraphs
+            curIns = curIns !== null ? curIns + "\n" + txt : txt;
+            if (curDel !== null) { deleted.push(curDel); curDel = null; }
+          } else if (p.isDeleteRevision && txt) {
+            // Merge consecutive deleted paragraphs
+            curDel = curDel !== null ? curDel + "\n" + txt : txt;
+            if (curIns !== null) { inserted.push({ text: curIns, color: "tracked" }); curIns = null; }
+          } else {
+            if (curIns !== null) { inserted.push({ text: curIns, color: "tracked" }); curIns = null; }
+            if (curDel !== null) { deleted.push(curDel); curDel = null; }
+          }
+        }
+        if (curIns !== null) inserted.push({ text: curIns, color: "tracked" });
+        if (curDel !== null) deleted.push(curDel);
+
+        resolve({ inserted, deleted });
+      } catch(e) {
+        console.warn("Word tracked changes API:", e.message);
+        resolve({ inserted: [], deleted: [] });
+      }
+    }).catch(() => resolve({ inserted: [], deleted: [] }));
+  });
+}
+
 function getOoxmlChanges() {
   return new Promise((resolve) => {
     Word.run(async (context) => {
