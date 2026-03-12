@@ -352,7 +352,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260312-H</span>
+        <span style="font-size:9px;color:#6b7280;">v20260312-I</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -901,7 +901,7 @@ async function startReview() {
       withTimeout(getDocumentComments(),     4000, []),
       withTimeout(getOoxmlChanges(),        12000, { struck: [], inserted: [] }),
       withTimeout(getColoredTexts(),        15000, []),
-      withTimeout(getWordTrackedChanges(),   8000, { inserted: [], deleted: [] }),
+      withTimeout(getWordTrackedChanges(),  15000, { inserted: [], deleted: [] }),
     ]);
     if (_reviewCancelled) return;
     docText = rawText;
@@ -1230,6 +1230,7 @@ function getWordTrackedChanges() {
   return new Promise(resolve => {
     Word.run(async context => {
       try {
+        const WNS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
         const paras = context.document.body.paragraphs;
         paras.load("items");
         await context.sync();
@@ -1239,24 +1240,64 @@ function getWordTrackedChanges() {
         const inserted = [];
         const deleted  = [];
         let curIns = null, curDel = null;
+        const needsInlineScan = []; // paragraphs not flagged at paragraph-level
 
         for (const p of paras.items) {
           const txt = p.text.trim();
           if (p.isInsertRevision && txt) {
-            // Merge consecutive inserted paragraphs
             curIns = curIns !== null ? curIns + "\n" + txt : txt;
             if (curDel !== null) { deleted.push(curDel); curDel = null; }
           } else if (p.isDeleteRevision && txt) {
-            // Merge consecutive deleted paragraphs
             curDel = curDel !== null ? curDel + "\n" + txt : txt;
             if (curIns !== null) { inserted.push({ text: curIns, color: "tracked" }); curIns = null; }
           } else {
             if (curIns !== null) { inserted.push({ text: curIns, color: "tracked" }); curIns = null; }
             if (curDel !== null) { deleted.push(curDel); curDel = null; }
+            if (txt) needsInlineScan.push(p);
           }
         }
         if (curIns !== null) inserted.push({ text: curIns, color: "tracked" });
         if (curDel !== null) deleted.push(curDel);
+
+        // ── Inline track changes via per-paragraph OOXML ──────────────────
+        // paragraph.isInsertRevision only flags whole-paragraph changes.
+        // Counterparties often insert/delete words within existing paragraphs —
+        // those show <w:ins>/<w:del> in the paragraph OOXML even when
+        // body.getOoxml() may strip revision markup.
+        const toScan = needsInlineScan.slice(0, 200);
+        if (toScan.length) {
+          const ooxmlProxies = toScan.map(p => p.getOoxml());
+          await context.sync(); // batch: one round-trip for all paragraph OOXMLs
+
+          for (const proxy of ooxmlProxies) {
+            const xml = proxy.value || "";
+            if (!xml.includes(":ins") && !xml.includes(":del")) continue;
+
+            const xmlDoc = new DOMParser().parseFromString(xml, "text/xml");
+
+            // Inline insertions
+            for (const ins of xmlDoc.getElementsByTagNameNS(WNS, "ins")) {
+              const texts = [];
+              for (const r of ins.getElementsByTagNameNS(WNS, "r")) {
+                const t = r.getElementsByTagNameNS(WNS, "t")[0];
+                if (t && t.textContent) texts.push(t.textContent);
+              }
+              const combined = texts.join("").trim();
+              if (combined.length > 1) inserted.push({ text: combined, color: "tracked" });
+            }
+
+            // Inline deletions
+            for (const del of xmlDoc.getElementsByTagNameNS(WNS, "del")) {
+              const texts = [];
+              for (const r of del.getElementsByTagNameNS(WNS, "r")) {
+                const t = r.getElementsByTagNameNS(WNS, "delText")[0];
+                if (t && t.textContent) texts.push(t.textContent);
+              }
+              const combined = texts.join("").trim();
+              if (combined.length > 1) deleted.push(combined);
+            }
+          }
+        }
 
         resolve({ inserted, deleted });
       } catch(e) {
