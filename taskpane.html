@@ -352,7 +352,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260312-D</span>
+        <span style="font-size:9px;color:#6b7280;">v20260312-E</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -937,7 +937,9 @@ async function startReview() {
       return false;
     };
 
-    const allAdded = [...coloredTexts, ...trackedInserts].filter(a => !isTemplateText(a.text));
+    const allAdded = [...coloredTexts, ...trackedInserts]
+      .filter(a => !isTemplateText(a.text))
+      .filter((a, i, arr) => arr.findIndex(b => _normForFilter(b.text) === _normForFilter(a.text)) === i);
 
     // Filter out struck text that still appears in the document body —
     // body.text is the final state (deletions excluded), so if a "struck" word
@@ -1241,40 +1243,75 @@ function getOoxmlChanges() {
         const inserted = [];
 
         for (const para of xmlDoc.getElementsByTagNameNS(WNS, "p")) {
-          // ── Strikethrough runs ───────────────────────────────────────────
-          // Red (colored) strikethrough = Added Language (counterparty's markup)
-          // Plain/black strikethrough   = Removed Language
-          // TC deletions (<w:delText>)  = Removed Language
+          // Returns non-black explicit color on a run, or null
+          const getRunColor = (run) => {
+            const rPr = run.getElementsByTagNameNS(WNS, "rPr")[0];
+            if (!rPr) return null;
+            const colorEl = rPr.getElementsByTagNameNS(WNS, "color")[0];
+            if (!colorEl) return null;
+            const val = (colorEl.getAttribute("w:val") || colorEl.getAttributeNS(WNS, "val") || "").toLowerCase();
+            return (val && val !== "auto" && val !== "000000" && val !== "ffffff") ? val : null;
+          };
+
+          // True if this run is inside a <w:ins> child of this para (handled separately)
+          const isInIns = (node) => {
+            let el = node.parentNode;
+            while (el && el !== para) {
+              if (el.localName === "ins") return true;
+              el = el.parentNode;
+            }
+            return false;
+          };
+
           let strikeBuffer = [];
+          let colorBuffer = []; let colorVal = null;
+          const flushStrike = () => {
+            if (!strikeBuffer.length) return;
+            const combined = strikeBuffer.join("").trim();
+            if (combined.length > 3) struck.push(combined);
+            strikeBuffer = [];
+          };
+          const flushColor = () => {
+            if (!colorBuffer.length) return;
+            const combined = colorBuffer.join("").trim();
+            if (combined.length > 1) inserted.push({ text: combined, color: colorVal || "colored" });
+            colorBuffer = []; colorVal = null;
+          };
+
           for (const run of para.getElementsByTagNameNS(WNS, "r")) {
-            // Support both regular <w:t> and TC deletion <w:delText>
+            if (isInIns(run)) continue; // handled by <w:ins> loop below
             const tEl = run.getElementsByTagNameNS(WNS, "t")[0]
                       || run.getElementsByTagNameNS(WNS, "delText")[0];
             const text = tEl ? tEl.textContent : "";
             const isDelText = !!run.getElementsByTagNameNS(WNS, "delText")[0];
+            const isStruck = hasStrike(run) || isDelText;
+            const runColor = getRunColor(run);
 
-            if ((hasStrike(run) || isDelText) && text) {
-              // Colored + manual strikethrough → Added Language
-              if (hasExplicitColor(run) && !isDelText) {
-                if (strikeBuffer.length) {
-                  const combined = strikeBuffer.join("").trim();
-                  if (combined.length > 3) struck.push(combined);
-                  strikeBuffer = [];
-                }
+            if (isStruck && text) {
+              flushColor();
+              if (runColor && !isDelText) {
+                // Colored strikethrough → Added Language (counterparty markup)
+                flushStrike();
                 if (text.trim().length > 20) inserted.push({ text: text.trim(), color: "colored-strike" });
               } else {
                 strikeBuffer.push(text);
               }
-            } else if (strikeBuffer.length) {
-              const combined = strikeBuffer.join("").trim();
-              if (combined.length > 3) struck.push(combined);
-              strikeBuffer = [];
+            } else if (runColor && text) {
+              // Non-struck colored run → Added Language
+              flushStrike();
+              if (!colorVal || runColor === colorVal) {
+                colorBuffer.push(text); colorVal = runColor;
+              } else {
+                flushColor();
+                colorBuffer.push(text); colorVal = runColor;
+              }
+            } else {
+              flushStrike();
+              flushColor();
             }
           }
-          if (strikeBuffer.length) {
-            const combined = strikeBuffer.join("").trim();
-            if (combined.length > 3) struck.push(combined);
-          }
+          flushStrike();
+          flushColor();
 
           // ── Tracked insertions: <w:ins> children of this paragraph ──────
           for (const ins of para.getElementsByTagNameNS(WNS, "ins")) {
