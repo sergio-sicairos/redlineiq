@@ -341,7 +341,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260309-G</span>
+        <span style="font-size:9px;color:#6b7280;">v20260309-H</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -915,7 +915,20 @@ async function startReview() {
     lastDocComments = docComments;
     const struckTexts   = ooxmlChanges.struck;
     const trackedInserts = ooxmlChanges.inserted;
-    const allAdded = [...coloredTexts, ...trackedInserts];
+
+    // Build a normalized set of playbook text to filter out template language
+    // that appears colored in the document (formatting artifact, not an addition).
+    const playbookTexts = (playbook.clauses || []).flatMap(c =>
+      [c.standard, c.fallback, c.hardLimit].filter(Boolean).map(t => t.toLowerCase().trim())
+    );
+    const isTemplateText = (text) => {
+      if (!playbookTexts.length) return false;
+      const t = text.toLowerCase().trim();
+      if (t.length < 10) return false;
+      return playbookTexts.some(pt => pt.includes(t) || t.includes(pt.slice(0, 40)));
+    };
+
+    const allAdded = [...coloredTexts, ...trackedInserts].filter(a => !isTemplateText(a.text));
     if (!docText.trim()) { alert("Document appears to be empty."); show("view-idle"); return; }
 
     const scanLabel = `Analyzing ${reviewDocType}${docComments.length ? ` + ${docComments.length} comment${docComments.length>1?"s":""}` : ""}${struckTexts.length ? ` + ${struckTexts.length} strikethrough` : ""}${allAdded.length ? ` + ${allAdded.length} added` : ""}…`;
@@ -1261,9 +1274,19 @@ function getColoredTexts() {
 
         // Added language = text whose color differs from the document default (black/auto).
         // Tracked insertions (red+underline from TC) are handled separately via <w:ins> OOXML.
+        // Only flag colors that are typical for change markup — exclude common decorative
+        // colors used in headings/tables (dark greys, navy blues, dark browns, etc.).
         const isAdded = color => {
           const c = (color || "").replace("#","").toLowerCase();
-          return c !== "" && c !== "auto" && c !== "000000" && c !== "ffffff";
+          if (!c || c === "auto" || c === "000000" || c === "ffffff") return false;
+          const r = parseInt(c.slice(0,2), 16);
+          const g = parseInt(c.slice(2,4), 16);
+          const b = parseInt(c.slice(4,6), 16);
+          // Skip near-black colors (common heading/table formatting)
+          if (r < 80 && g < 80 && b < 80) return false;
+          // Skip dark navy/slate (common theme colors in Word templates)
+          if (r < 80 && g < 80 && b < 160 && b > r) return false;
+          return true;
         };
 
         const results = [];
