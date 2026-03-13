@@ -361,7 +361,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260312-T</span>
+        <span style="font-size:9px;color:#6b7280;">v20260312-U</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -915,7 +915,7 @@ async function startReview() {
     lastDocComments = docComments;
 
     const struckTexts    = docChanges.struck;
-    const tcDeleted      = docChanges.tcDeleted;
+    const tcDeleted      = [...(docChanges.tcDeleted || []), ...(docChanges.ooxmlDeleted || [])];
     const trackedInserts = docChanges.inserted;
     const coloredTexts   = docChanges.coloredTexts;
 
@@ -1272,6 +1272,7 @@ function getDocumentChanges() {
 
         // ── A. OOXML-based detection (manual strike, colored runs, <w:ins>/<w:del>) ──
         const struck = [];
+        const ooxmlDeleted = []; // TC deletions from <w:del> — bypass rawText false-positive filter
         const ooxmlInserted = [];
         const xml = ooxmlProxy.value || "";
 
@@ -1303,8 +1304,9 @@ function getDocumentChanges() {
               while (el && el !== para) { if (el.localName === "ins") return true; el = el.parentNode; }
               return false;
             };
-            let sBuf = [], cBuf = [], cVal = null;
+            let sBuf = [], dBuf = [], cBuf = [], cVal = null;
             const flushS = () => { if (!sBuf.length) return; const t = sBuf.join("").trim(); if (t.length > 3) struck.push(t); sBuf = []; };
+            const flushD = () => { if (!dBuf.length) return; const t = dBuf.join("").trim(); if (t.length > 1) ooxmlDeleted.push(t); dBuf = []; };
             const flushC = () => { if (!cBuf.length) return; const t = cBuf.join("").trim(); if (t.length > 1) ooxmlInserted.push({ text: t, color: cVal || "colored", _docOrder: _pIdx }); cBuf = []; cVal = null; };
 
             for (const run of para.getElementsByTagNameNS(WNS, "r")) {
@@ -1316,15 +1318,16 @@ function getDocumentChanges() {
               const rc = getRunColor(run);
               if (isStruck && text) {
                 flushC();
-                if (rc && !isDel) { flushS(); if (text.trim().length > 20) ooxmlInserted.push({ text: text.trim(), color: "colored-strike", _docOrder: _pIdx }); }
-                else sBuf.push(text);
+                if (rc && !isDel) { flushS(); flushD(); if (text.trim().length > 20) ooxmlInserted.push({ text: text.trim(), color: "colored-strike", _docOrder: _pIdx }); }
+                else if (isDel) { flushS(); dBuf.push(text); }  // TC deletion → separate buffer
+                else { flushD(); sBuf.push(text); }             // manual strike → original buffer
               } else if (rc && text) {
-                flushS();
+                flushS(); flushD();
                 if (!cVal || rc === cVal) { cBuf.push(text); cVal = rc; }
                 else { flushC(); cBuf.push(text); cVal = rc; }
-              } else { flushS(); flushC(); }
+              } else { flushS(); flushD(); flushC(); }
             }
-            flushS(); flushC();
+            flushS(); flushD(); flushC();
 
             // If para has <w:ins>: text = just the inserted portions (so AI sees what changed),
             // anchor = full paragraph (so navigation can find it in the document)
@@ -1404,12 +1407,12 @@ function getDocumentChanges() {
         }
         if (curM) mergedIns.push(curM);
 
-        resolve({ struck: [...new Set(struck)], inserted: mergedIns, coloredTexts, tcDeleted });
+        resolve({ struck: [...new Set(struck)], inserted: mergedIns, coloredTexts, tcDeleted, ooxmlDeleted });
       } catch(e) {
         console.warn("Document changes:", e.message);
-        resolve({ struck: [], inserted: [], coloredTexts: [], tcDeleted: [] });
+        resolve({ struck: [], inserted: [], coloredTexts: [], tcDeleted: [], ooxmlDeleted: [] });
       }
-    }).catch(() => resolve({ struck: [], inserted: [], coloredTexts: [], tcDeleted: [] }));
+    }).catch(() => resolve({ struck: [], inserted: [], coloredTexts: [], tcDeleted: [], ooxmlDeleted: [] }));
   });
 }
 
