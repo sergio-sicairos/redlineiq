@@ -167,27 +167,6 @@
       background:#0c0c0c; border:1px solid rgba(255,255,255,0.15); padding:12px;
       font-size:12px; color:#cccccc; line-height:1.6; margin-bottom:10px;
     }
-    .scope-row {
-      display:flex; gap:8px; margin-bottom:8px;
-    }
-    .scope-pill {
-      flex:1; padding:8px 10px; border-radius:3px; font-size:11px; line-height:1.5;
-    }
-    .scope-pill .scope-label {
-      font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:4px;
-    }
-    .scope-pill-red   { background:rgba(224,32,32,0.07); border:1px solid rgba(224,32,32,0.35); }
-    .scope-pill-red   .scope-label { color:#e02020; }
-    .scope-pill-amber { background:rgba(245,158,11,0.07); border:1px solid rgba(245,158,11,0.35); }
-    .scope-pill-amber .scope-label { color:#f59e0b; }
-    .scope-expectations {
-      font-size:11px; color:#aaaaaa; line-height:1.6; padding:8px 10px;
-      background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.08); border-radius:3px;
-    }
-    .scope-expectations .scope-label {
-      font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em;
-      color:#777; margin-bottom:4px;
-    }
     .footer {
       padding:10px 14px; border-top:1px solid #ffffff; display:flex; gap:6px;
     }
@@ -382,7 +361,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260313-A</span>
+        <span style="font-size:9px;color:#6b7280;">v20260313-B</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -418,25 +397,6 @@
       <div id="result-summary" class="summary-box"></div>
     </div>
 
-
-    <!-- Scope Summary -->
-    <div class="card" id="scope-summary-card" style="display:none;margin-top:10px;">
-      <div class="section-title" style="margin-bottom:8px;">Counterparty Position</div>
-      <div class="scope-row">
-        <div class="scope-pill scope-pill-red" id="scope-reduction-pill">
-          <div class="scope-label">Reducing Our Scope</div>
-          <div id="scope-reduction-text" style="color:#cccccc;">—</div>
-        </div>
-        <div class="scope-pill scope-pill-amber" id="scope-expansion-pill">
-          <div class="scope-label">Expanding Our Obligations</div>
-          <div id="scope-expansion-text" style="color:#cccccc;">—</div>
-        </div>
-      </div>
-      <div class="scope-expectations">
-        <div class="scope-label">Their Expectations</div>
-        <div id="scope-expectations-text">Analyzing…</div>
-      </div>
-    </div>
 
     <!-- Progress -->
     <div id="progress-section">
@@ -1161,16 +1121,12 @@ async function startReview() {
     const negotiateCount = recs.filter(r => r === "negotiate").length;
     const overallRisk = rejectCount > 0 ? "high" : negotiateCount > 0 ? "medium" : "low";
 
-    setStep("Summarizing counterparty position…");
-    const scopeSummary = await generateScopeSummary(clauses, reviewDocType);
-
     const result = {
       overallRisk,
       summary: `Reviewed ${items.length} change${items.length !== 1 ? "s" : ""} (${docComments.length} comment${docComments.length !== 1 ? "s" : ""}, ${allAdded.length} addition${allAdded.length !== 1 ? "s" : ""}, ${struckTexts.length} removal${struckTexts.length !== 1 ? "s" : ""}). ${rejectCount} reject, ${negotiateCount} negotiate recommended.`,
       clauses,
       criticalIssues: clauses.filter(c => c.recommendation === "reject").map(c => `${c.category}: ${c.reasoning}`),
       autoApprovable: rejectCount === 0 && negotiateCount === 0,
-      scopeSummary,
     };
 
     stopPhraseCycle();
@@ -1187,28 +1143,6 @@ async function startReview() {
     }
   } finally {
     clearTimeout(globalTimer);
-  }
-}
-
-// ── Counterparty scope/expectation summary ───────────────────────────────────
-async function generateScopeSummary(clauses, docType) {
-  if (!clauses.length) return null;
-  const lines = clauses.map(c =>
-    `[${c._signalType || "Change"}] category=${c.category || "?"} rec=${c.recommendation} found="${(c.found || "").slice(0, 120)}"`
-  ).join("\n");
-  const sys = `You analyze redline summaries for a vendor reviewing a customer's contract edits. Return ONLY valid JSON with exactly three keys:
-"scopeReduction": one sentence on how the customer is narrowing or removing protections/rights/obligations that benefited the vendor (max 25 words).
-"scopeExpansion": one sentence on how the customer is adding or expanding obligations, liability, or deliverables for the vendor (max 25 words).
-"expectations": one sentence describing what the customer is trying to achieve overall from a business/risk perspective (max 30 words).
-If a dimension has no evidence, write "None identified."`;
-  const user = `Document type: ${docType}\n\nRedline changes:\n${lines}`;
-  try {
-    const raw = await callClaude(sys, user, 300);
-    const json = raw.match(/\{[\s\S]*\}/)?.[0];
-    return json ? JSON.parse(json) : null;
-  } catch(e) {
-    console.warn("Scope summary failed:", e.message);
-    return null;
   }
 }
 
@@ -1973,24 +1907,16 @@ function renderResults(result) {
   // Summary
   document.getElementById("result-summary").textContent = result.summary || "Review complete.";
 
-  // Scope summary
-  const scopeCard = document.getElementById("scope-summary-card");
-  if (result.scopeSummary) {
-    document.getElementById("scope-reduction-text").textContent = result.scopeSummary.scopeReduction || "None identified.";
-    document.getElementById("scope-expansion-text").textContent = result.scopeSummary.scopeExpansion || "None identified.";
-    document.getElementById("scope-expectations-text").textContent = result.scopeSummary.expectations || "—";
-    scopeCard.style.display = "";
-  } else {
-    scopeCard.style.display = "none";
-  }
-
   renderClauses();
   updateProgress();
 }
 
 function renderClauses() {
   const container = document.getElementById("clauses-list");
-  container.innerHTML = reviewClauses.map((c,i) => {
+  const LIABILITY_CATS = /liability|indemnif/i;
+  const liabilityIndices = reviewClauses.map((c,i) => i).filter(i => LIABILITY_CATS.test(reviewClauses[i].category || ""));
+  const otherIndices     = reviewClauses.map((c,i) => i).filter(i => !LIABILITY_CATS.test(reviewClauses[i].category || ""));
+  const clauseCard = (c, i) => {
     const dec = c.userDecision || c.recommendation;
     return `
     <div class="clause-card ${dec}" id="clause-${i}" onclick="cardClick(event,${i})">
@@ -2060,7 +1986,19 @@ function renderClauses() {
       ` : ""}
       ${c.applied ? `<div style="font-size:10px;color:#555555;margin-top:6px;">✓ Applied to document</div>` : ""}
     </div>`;
-  }).join("");
+  };
+  const sectionHeader = (label) =>
+    `<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#777;padding:10px 2px 6px;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:6px;">${label}</div>`;
+  let html = "";
+  if (liabilityIndices.length) {
+    html += sectionHeader("Liability & Indemnification");
+    html += liabilityIndices.map(i => clauseCard(reviewClauses[i], i)).join("");
+  }
+  if (otherIndices.length) {
+    if (liabilityIndices.length) html += sectionHeader("All Other Changes");
+    html += otherIndices.map(i => clauseCard(reviewClauses[i], i)).join("");
+  }
+  container.innerHTML = html;
   setTimeout(initFoundExpanders, 150);
 }
 
