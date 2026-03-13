@@ -361,7 +361,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260312-N</span>
+        <span style="font-size:9px;color:#6b7280;">v20260312-O</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -954,7 +954,8 @@ async function startReview() {
       return false;
     };
 
-    const allAdded = [...coloredTexts, ...trackedInserts]
+    // Put tracked items first so dedup always keeps the tracked version over colored duplicates
+    const allAdded = [...trackedInserts.filter(a => a.color === "tracked"), ...coloredTexts, ...trackedInserts.filter(a => a.color !== "tracked")]
       // Track Changes insertions are definitively marked by Word — never filter them
       .filter(a => a.color === "tracked" || !isTemplateText(a.text))
       .filter((a, i, arr) => arr.findIndex(b => _normForFilter(b.text) === _normForFilter(a.text)) === i);
@@ -1361,13 +1362,18 @@ function getDocumentChanges() {
         if (curDel !== null) tcDeleted.push(curDel);
         if (cBuf2 !== null) coloredTexts.push({ text: cBuf2, color: cBufColor });
 
-        // ── C. Merge consecutive same-color inserted items ────────────────────
+        // ── C. Merge consecutive same-color non-tracked items; keep tracked separate ──
         const allIns = [...ooxmlInserted, ...tcInserted];
         const mergedIns = [];
         let curM = null;
         for (const item of allIns) {
-          if (curM && curM.color === item.color) curM.text += "\n" + item.text;
-          else { if (curM) mergedIns.push(curM); curM = { ...item }; }
+          // Never merge tracked TC items — each paragraph is its own clause card
+          if (curM && curM.color === item.color && item.color !== "tracked") {
+            curM.text += "\n" + item.text;
+          } else {
+            if (curM) mergedIns.push(curM);
+            curM = { ...item };
+          }
         }
         if (curM) mergedIns.push(curM);
 
