@@ -361,7 +361,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260312-L</span>
+        <span style="font-size:9px;color:#6b7280;">v20260312-M</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -2295,11 +2295,44 @@ async function runDebugScan() {
         lines.push("");
       }
 
-      // Show first w:ins snippet from OOXML if present
-      if (xml.includes("w:ins")) {
-        const idx = xml.indexOf("w:ins");
-        lines.push("=== First w:ins context (±200 chars) ===");
-        lines.push(xml.slice(Math.max(0, idx - 50), idx + 200));
+      // Test DOMParser namespace resolution on the OOXML
+      lines.push("=== DOMParser namespace test ===");
+      try {
+        const WNS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        const xmlDoc = new DOMParser().parseFromString(xml, "text/xml");
+        const parseErr = xmlDoc.querySelector("parsererror");
+        if (parseErr) {
+          lines.push("PARSE ERROR: " + parseErr.textContent.slice(0, 200));
+        } else {
+          const wParas = xmlDoc.getElementsByTagNameNS(WNS, "p");
+          const wIns   = xmlDoc.getElementsByTagNameNS(WNS, "ins");
+          const wDel   = xmlDoc.getElementsByTagNameNS(WNS, "del");
+          lines.push("getElementsByTagNameNS <w:p>:   " + wParas.length);
+          lines.push("getElementsByTagNameNS <w:ins>: " + wIns.length);
+          lines.push("getElementsByTagNameNS <w:del>: " + wDel.length);
+
+          // Also try without namespace (fallback check)
+          const anyIns = xmlDoc.getElementsByTagName("w:ins");
+          lines.push("getElementsByTagName 'w:ins':   " + anyIns.length);
+
+          if (wIns.length > 0) {
+            lines.push("");
+            lines.push("=== First 3 <w:ins> texts ===");
+            Array.from(wIns).slice(0, 3).forEach((ins, i) => {
+              const texts = Array.from(ins.getElementsByTagNameNS(WNS, "t")).map(t => t.textContent).join("");
+              lines.push("  [" + i + "] " + texts.slice(0, 120));
+            });
+          }
+          if (anyIns.length > 0 && wIns.length === 0) {
+            lines.push("");
+            lines.push("=== getElementsByTagName fallback: first 3 w:ins ===");
+            Array.from(anyIns).slice(0, 3).forEach((ins, i) => {
+              lines.push("  [" + i + "] " + ins.textContent.slice(0, 120));
+            });
+          }
+        }
+      } catch(domErr) {
+        lines.push("DOM parse error: " + domErr.message);
       }
 
       out.textContent = lines.join("\n");
