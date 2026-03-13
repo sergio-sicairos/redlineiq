@@ -361,7 +361,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260312-Q</span>
+        <span style="font-size:9px;color:#6b7280;">v20260312-R</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -954,12 +954,19 @@ async function startReview() {
       return false;
     };
 
-    // Tracked TC items always surface — no template filter, no dedup (same word inserted
-    // in different clauses is meaningful). Non-tracked items are deduped as before.
-    const _nonTracked = [...coloredTexts, ...trackedInserts.filter(a => a.color !== "tracked")]
-      .filter(a => !isTemplateText(a.text))
-      .filter((a, i, arr) => arr.findIndex(b => _normForFilter(b.text) === _normForFilter(a.text)) === i);
-    const allAdded = [...trackedInserts.filter(a => a.color === "tracked"), ..._nonTracked];
+    // Build allAdded in document order. Tracked TC items are never deduped or filtered.
+    // Non-tracked items are deduped (keeping first occurrence) and template-filtered.
+    const _seenNonTracked = new Set();
+    const allAdded = [...coloredTexts, ...trackedInserts]
+      .filter(a => {
+        if (a.color === "tracked") return true;
+        if (isTemplateText(a.text)) return false;
+        const norm = _normForFilter(a.text);
+        if (_seenNonTracked.has(norm)) return false;
+        _seenNonTracked.add(norm);
+        return true;
+      })
+      .sort((a, b) => (a._docOrder || 0) - (b._docOrder || 0));
 
     // Filter manual strikethrough false-positives — if the struck text still appears
     // in body.text it was likely decorative formatting, not an actual removal.
@@ -1283,7 +1290,9 @@ function getDocumentChanges() {
             return (theme && (theme.startsWith("accent") || theme === "hyperlink")) ? theme : null;
           };
 
+          let _pIdx = 0;
           for (const para of xmlDoc.getElementsByTagNameNS(WNS, "p")) {
+            _pIdx++;
             const isInIns = node => {
               let el = node.parentNode;
               while (el && el !== para) { if (el.localName === "ins") return true; el = el.parentNode; }
@@ -1291,7 +1300,7 @@ function getDocumentChanges() {
             };
             let sBuf = [], cBuf = [], cVal = null;
             const flushS = () => { if (!sBuf.length) return; const t = sBuf.join("").trim(); if (t.length > 3) struck.push(t); sBuf = []; };
-            const flushC = () => { if (!cBuf.length) return; const t = cBuf.join("").trim(); if (t.length > 1) ooxmlInserted.push({ text: t, color: cVal || "colored" }); cBuf = []; cVal = null; };
+            const flushC = () => { if (!cBuf.length) return; const t = cBuf.join("").trim(); if (t.length > 1) ooxmlInserted.push({ text: t, color: cVal || "colored", _docOrder: _pIdx }); cBuf = []; cVal = null; };
 
             for (const run of para.getElementsByTagNameNS(WNS, "r")) {
               if (isInIns(run)) continue;
@@ -1302,7 +1311,7 @@ function getDocumentChanges() {
               const rc = getRunColor(run);
               if (isStruck && text) {
                 flushC();
-                if (rc && !isDel) { flushS(); if (text.trim().length > 20) ooxmlInserted.push({ text: text.trim(), color: "colored-strike" }); }
+                if (rc && !isDel) { flushS(); if (text.trim().length > 20) ooxmlInserted.push({ text: text.trim(), color: "colored-strike", _docOrder: _pIdx }); }
                 else sBuf.push(text);
               } else if (rc && text) {
                 flushS();
@@ -1335,7 +1344,7 @@ function getDocumentChanges() {
               }
               const insText = insT.join("").trim();
               const paraText = allT.join("").trim();
-              if (insText.length > 1) ooxmlInserted.push({ text: insText, color: "tracked", _paraAnchor: paraText });
+              if (insText.length > 1) ooxmlInserted.push({ text: insText, color: "tracked", _paraAnchor: paraText, _docOrder: _pIdx });
             }
           }
         }
@@ -1345,34 +1354,35 @@ function getDocumentChanges() {
         const coloredTexts = [];
         const tcInserted = [];
         const tcDeleted = [];
-        let curIns = null, curDel = null, cBuf2 = null, cBufColor = null;
+        let curIns = null, curDel = null, cBuf2 = null, cBufColor = null, cBufStartIdx = 0;
 
-        for (const p of paras.items) {
+        for (let _bIdx = 0; _bIdx < paras.items.length; _bIdx++) {
+          const p = paras.items[_bIdx];
           const txt = p.text.trim();
           if (!txt) continue;
           if (p.isInsertRevision) {
             curIns = curIns !== null ? curIns + "\n" + txt : txt;
             if (curDel !== null) { tcDeleted.push(curDel); curDel = null; }
-            if (cBuf2 !== null) { coloredTexts.push({ text: cBuf2, color: cBufColor }); cBuf2 = null; cBufColor = null; }
+            if (cBuf2 !== null) { coloredTexts.push({ text: cBuf2, color: cBufColor, _docOrder: cBufStartIdx }); cBuf2 = null; cBufColor = null; }
           } else if (p.isDeleteRevision) {
             curDel = curDel !== null ? curDel + "\n" + txt : txt;
             if (curIns !== null) { tcInserted.push({ text: curIns, color: "tracked" }); curIns = null; }
-            if (cBuf2 !== null) { coloredTexts.push({ text: cBuf2, color: cBufColor }); cBuf2 = null; cBufColor = null; }
+            if (cBuf2 !== null) { coloredTexts.push({ text: cBuf2, color: cBufColor, _docOrder: cBufStartIdx }); cBuf2 = null; cBufColor = null; }
           } else if (isColorAdded(p.font.color)) {
             const c = (p.font.color || "").toLowerCase();
             if (cBufColor === c) { cBuf2 = cBuf2 !== null ? cBuf2 + "\n" + txt : txt; }
-            else { if (cBuf2 !== null) coloredTexts.push({ text: cBuf2, color: cBufColor }); cBuf2 = txt; cBufColor = c; }
+            else { if (cBuf2 !== null) coloredTexts.push({ text: cBuf2, color: cBufColor, _docOrder: cBufStartIdx }); cBuf2 = txt; cBufColor = c; cBufStartIdx = _bIdx; }
             if (curIns !== null) { tcInserted.push({ text: curIns, color: "tracked" }); curIns = null; }
             if (curDel !== null) { tcDeleted.push(curDel); curDel = null; }
           } else {
             if (curIns !== null) { tcInserted.push({ text: curIns, color: "tracked" }); curIns = null; }
             if (curDel !== null) { tcDeleted.push(curDel); curDel = null; }
-            if (cBuf2 !== null) { coloredTexts.push({ text: cBuf2, color: cBufColor }); cBuf2 = null; cBufColor = null; }
+            if (cBuf2 !== null) { coloredTexts.push({ text: cBuf2, color: cBufColor, _docOrder: cBufStartIdx }); cBuf2 = null; cBufColor = null; }
           }
         }
         if (curIns !== null) tcInserted.push({ text: curIns, color: "tracked" });
         if (curDel !== null) tcDeleted.push(curDel);
-        if (cBuf2 !== null) coloredTexts.push({ text: cBuf2, color: cBufColor });
+        if (cBuf2 !== null) coloredTexts.push({ text: cBuf2, color: cBufColor, _docOrder: cBufStartIdx });
 
         // ── C. Merge consecutive same-color non-tracked items; keep tracked separate ──
         const allIns = [...ooxmlInserted, ...tcInserted];
