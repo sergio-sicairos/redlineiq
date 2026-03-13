@@ -361,7 +361,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260312-U</span>
+        <span style="font-size:9px;color:#6b7280;">v20260312-V</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -915,7 +915,8 @@ async function startReview() {
     lastDocComments = docComments;
 
     const struckTexts    = docChanges.struck;
-    const tcDeleted      = [...(docChanges.tcDeleted || []), ...(docChanges.ooxmlDeleted || [])];
+    const tcDeletedTexts = docChanges.tcDeleted || [];           // string[] from isDeleteRevision
+    const ooxmlDeleted   = docChanges.ooxmlDeleted || [];        // {text,paraContext}[] from <w:del>
     const trackedInserts = docChanges.inserted;
     const coloredTexts   = docChanges.coloredTexts;
 
@@ -984,10 +985,13 @@ async function startReview() {
     });
     // Tracked deletions (isDeleteRevision) are definitively removed — no false-positive
     // filter needed. Deduplicate against manual strikethrough.
-    const tcDeletedNorms = new Set(tcDeleted.map(t => _normForFilter(t)));
+    const allTcDeletedNorms = new Set([
+      ...tcDeletedTexts.map(t => _normForFilter(t)),
+      ...ooxmlDeleted.map(d => _normForFilter(d.text)),
+    ]);
     const struckFiltered = [
-      ...struckManualFiltered.filter(t => !tcDeletedNorms.has(_normForFilter(t))),
-      ...tcDeleted,
+      ...struckManualFiltered.filter(t => !allTcDeletedNorms.has(_normForFilter(t))),
+      ...tcDeletedTexts,
     ];
 
     if (!docText.trim()) { alert("Document appears to be empty."); show("view-idle"); return; }
@@ -1024,6 +1028,7 @@ async function startReview() {
       ...candidateComments.filter((_, idx) => !agreementIndices.has(idx))
         .map((c, idx) => ({ type: "Comment", text: c.content || "", anchor: c.anchoredText || "", author: c.author || "", _commentContent: c.content || "", _commentAnchor: c.anchoredText || "", _commentIdx: idx })),
       ...struckFiltered.map(t => ({ type: "Removed Language", text: t, anchor: "", author: "" })),
+      ...ooxmlDeleted.map(d => ({ type: "Removed Language", text: d.text, anchor: "", _navContext: d.paraContext || "", author: "" })),
       ...allAdded.filter((a, idx) => {
           if (a.color === "tracked") return true;
           const nonTrackedIdx = allAdded.slice(0, idx + 1).filter(x => x.color !== "tracked").length - 1;
@@ -1079,6 +1084,7 @@ async function startReview() {
         // Always use full original text as found (not AI's truncated version)
         clause.found = item.text;
         clause._signalType = item.type;
+        if (item._navContext) clause._navContext = item._navContext;
         // For comments, attach original content/anchor so the found box shows the full comment
         if (item.type === "Comment") {
           clause._isComment = true;
@@ -1306,7 +1312,23 @@ function getDocumentChanges() {
             };
             let sBuf = [], dBuf = [], cBuf = [], cVal = null;
             const flushS = () => { if (!sBuf.length) return; const t = sBuf.join("").trim(); if (t.length > 3) struck.push(t); sBuf = []; };
-            const flushD = () => { if (!dBuf.length) return; const t = dBuf.join("").trim(); if (t.length > 1) ooxmlDeleted.push(t); dBuf = []; };
+            const flushD = () => {
+              if (!dBuf.length) return;
+              const t = dBuf.join("").trim();
+              if (t.length > 1) {
+                // Capture non-del/non-ins surrounding text for navigation context
+                const ctxT = [];
+                for (const run of para.getElementsByTagNameNS(WNS, "r")) {
+                  let el = run.parentNode; let inSpc = false;
+                  while (el && el !== para) { if (el.localName === "del" || el.localName === "ins") { inSpc = true; break; } el = el.parentNode; }
+                  if (inSpc) continue;
+                  const tEl = run.getElementsByTagNameNS(WNS, "t")[0];
+                  if (tEl && tEl.textContent) ctxT.push(tEl.textContent);
+                }
+                ooxmlDeleted.push({ text: t, paraContext: ctxT.join("").trim() });
+              }
+              dBuf = [];
+            };
             const flushC = () => { if (!cBuf.length) return; const t = cBuf.join("").trim(); if (t.length > 1) ooxmlInserted.push({ text: t, color: cVal || "colored", _docOrder: _pIdx }); cBuf = []; cVal = null; };
 
             for (const run of para.getElementsByTagNameNS(WNS, "r")) {
@@ -2942,9 +2964,15 @@ function cardClick(event, idx) {
   if (!searchText.trim()) return;
 
   Word.run(async (context) => {
-    let range = await findClauseRange(context, searchText);
-    if (!range && c._signalType === "Added Language") {
-      range = await findParagraphContaining(context, searchText);
+    let range = null;
+    // For TC deletions with short text, body.search() finds the wrong occurrence.
+    // Use the surrounding paragraph context to find the right paragraph instead.
+    if (c._navContext && c._navContext.length >= 10 && searchText.length < 25) {
+      range = await findParagraphContaining(context, c._navContext);
+    }
+    if (!range) range = await findClauseRange(context, searchText);
+    if (!range && (c._signalType === "Added Language" || c._navContext)) {
+      range = await findParagraphContaining(context, c._navContext || searchText);
     }
     if (!range) return;
     range.select();
@@ -2962,9 +2990,13 @@ function navigateToClause(idx) {
   if (card) card.classList.add("nav-active");
 
   Word.run(async (context) => {
-    let range = await findClauseRange(context, foundText);
-    if (!range && clause._signalType === "Added Language") {
-      range = await findParagraphContaining(context, foundText);
+    let range = null;
+    if (clause._navContext && clause._navContext.length >= 10 && foundText.length < 25) {
+      range = await findParagraphContaining(context, clause._navContext);
+    }
+    if (!range) range = await findClauseRange(context, foundText);
+    if (!range && (clause._signalType === "Added Language" || clause._navContext)) {
+      range = await findParagraphContaining(context, clause._navContext || foundText);
     }
     if (!range) return;
     range.select();
