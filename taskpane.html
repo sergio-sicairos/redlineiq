@@ -140,6 +140,16 @@
     .spinner {
       width:60px; height:60px; display:inline-block; object-fit:contain;
     }
+    @keyframes cardClear {
+      0%   { opacity:1; transform:translateX(0) scaleY(1); max-height:600px; margin-bottom:8px; padding:12px; }
+      40%  { opacity:0.4; transform:translateX(18px) scaleY(0.97); }
+      70%  { opacity:0; transform:translateX(60px) scaleY(0.6); max-height:600px; }
+      100% { opacity:0; transform:translateX(60px) scaleY(0); max-height:0; margin-bottom:0; padding:0; border-width:0; }
+    }
+    .clause-card-clearing {
+      animation: cardClear 0.42s cubic-bezier(0.4,0,0.6,1) forwards;
+      overflow:hidden; pointer-events:none;
+    }
     @keyframes marqueeShine {
       0%   { background-position: -200% center; }
       100% { background-position: 200% center; }
@@ -363,7 +373,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260313-C</span>
+        <span style="font-size:9px;color:#6b7280;">v20260313-D</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -411,6 +421,11 @@
     </div>
 
     <!-- Clauses -->
+    <div id="cleared-bar" style="display:none;margin-bottom:8px;">
+      <button class="btn btn-secondary btn-sm" style="width:100%;justify-content:center;color:#555;border-color:rgba(255,255,255,0.1);" onclick="toggleClearedCards()">
+        <span id="cleared-bar-label">Show Cleared (0)</span>
+      </button>
+    </div>
     <div id="clauses-list"></div>
 
     <!-- Save button -->
@@ -571,6 +586,7 @@ const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 
 let playbook = { clauses: [], contracts: [], outcomes: [] };
 let reviewClauses = [];
+let _showCleared = false;
 let docText = "";
 let lastDocComments = []; // original extracted comments, kept for decision matching
 let uploadCategory = "templates";
@@ -1882,6 +1898,7 @@ function insertIntoDoc(text) {
 // ── Render results ────────────────────────────────────────────────────────────
 function renderResults(result) {
   reviewClauses = (result.clauses||[]).map(c => ({...c, userDecision: null, userNotes: ""}));
+  _showCleared = false;
 
   // Sort clauses by their position in the document (top to bottom).
   // Strip all non-alphanumeric chars before comparing so punctuation
@@ -2001,6 +2018,15 @@ function renderClauses() {
     html += otherIndices.map(i => clauseCard(reviewClauses[i], i)).join("");
   }
   container.innerHTML = html;
+  // Hide already-applied cards unless user has toggled them visible
+  if (!_showCleared) {
+    reviewClauses.forEach((c, i) => {
+      if (!c.applied) return;
+      const el = document.getElementById("clause-" + i);
+      if (el) el.style.display = "none";
+    });
+  }
+  _updateClearedBar();
   setTimeout(initFoundExpanders, 150);
 }
 
@@ -2148,8 +2174,39 @@ function completeDecision(idx) {
   if (!c || !c.userDecision) return;
   c.applied = true;
   applyDecisionToDoc(idx, c.userDecision);
-  renderClauses();
   updateProgress();
+  const el = document.getElementById("clause-" + idx);
+  if (el) {
+    el.classList.add("clause-card-clearing");
+    el.addEventListener("animationend", () => {
+      el.style.display = "none";
+      _updateClearedBar();
+    }, { once: true });
+  } else {
+    _updateClearedBar();
+  }
+}
+
+function _updateClearedBar() {
+  const count = reviewClauses.filter(c => c.applied).length;
+  const bar = document.getElementById("cleared-bar");
+  const lbl = document.getElementById("cleared-bar-label");
+  if (count > 0) {
+    bar.style.display = "";
+    lbl.textContent = (_showCleared ? "Hide Cleared" : "Show Cleared") + ` (${count})`;
+  } else {
+    bar.style.display = "none";
+  }
+}
+
+function toggleClearedCards() {
+  _showCleared = !_showCleared;
+  reviewClauses.forEach((c, i) => {
+    if (!c.applied) return;
+    const el = document.getElementById("clause-" + i);
+    if (el) el.style.display = _showCleared ? "" : "none";
+  });
+  _updateClearedBar();
 }
 
 function acceptAll() {
