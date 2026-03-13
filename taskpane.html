@@ -361,7 +361,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260312-O</span>
+        <span style="font-size:9px;color:#6b7280;">v20260312-P</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1016,7 +1016,7 @@ async function startReview() {
           const nonTrackedIdx = allAdded.slice(0, idx + 1).filter(x => x.color !== "tracked").length - 1;
           return !trivialAddedIndices.has(nonTrackedIdx);
         })
-        .map(a => ({ type: "Added Language", text: a.text, anchor: "", author: "" })),
+        .map(a => ({ type: "Added Language", text: a.text, anchor: a._paraAnchor || "", author: "" })),
     ].filter(i => i.text.trim().length > 2);
 
     // Pre-compute section numbers and doc context snippets (pure JS, no API calls)
@@ -1311,9 +1311,19 @@ function getDocumentChanges() {
             }
             flushS(); flushC();
 
-            // If para has <w:ins>, use full para text (not tiny fragments) for context
+            // If para has <w:ins>: text = just the inserted portions (so AI sees what changed),
+            // anchor = full paragraph (so navigation can find it in the document)
             const insEls = para.getElementsByTagNameNS(WNS, "ins");
             if (insEls.length > 0) {
+              // Collect only <w:ins> run text (what was specifically inserted)
+              const insT = [];
+              for (const insEl of insEls) {
+                for (const run of insEl.getElementsByTagNameNS(WNS, "r")) {
+                  const tEl = run.getElementsByTagNameNS(WNS, "t")[0];
+                  if (tEl && tEl.textContent) insT.push(tEl.textContent);
+                }
+              }
+              // Full paragraph text (excluding <w:del>) for navigation anchor
               const allT = [];
               for (const run of para.getElementsByTagNameNS(WNS, "r")) {
                 let el = run.parentNode; let inDel = false;
@@ -1322,8 +1332,9 @@ function getDocumentChanges() {
                 const tEl = run.getElementsByTagNameNS(WNS, "t")[0];
                 if (tEl && tEl.textContent) allT.push(tEl.textContent);
               }
+              const insText = insT.join("").trim();
               const paraText = allT.join("").trim();
-              if (paraText.length > 5) ooxmlInserted.push({ text: paraText, color: "tracked" });
+              if (insText.length > 1) ooxmlInserted.push({ text: insText, color: "tracked", _paraAnchor: paraText });
             }
           }
         }
