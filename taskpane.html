@@ -361,7 +361,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260312-R</span>
+        <span style="font-size:9px;color:#6b7280;">v20260312-S</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -954,13 +954,16 @@ async function startReview() {
       return false;
     };
 
-    // Build allAdded in document order. Tracked TC items are never deduped or filtered.
-    // Non-tracked items are deduped (keeping first occurrence) and template-filtered.
+    // Build allAdded in document order.
+    // isTemplateText applies to ALL items (tracked and non-tracked) — filters trivial
+    // single-word/phrase TC insertions like "solely" that match standard template language.
+    // Tracked items are never deduped (same word in different clauses = separate cards).
+    // Non-tracked items are deduped (keeping first occurrence).
     const _seenNonTracked = new Set();
     const allAdded = [...coloredTexts, ...trackedInserts]
       .filter(a => {
-        if (a.color === "tracked") return true;
-        if (isTemplateText(a.text)) return false;
+        if (isTemplateText(a.text)) return false; // filter template matches for all items
+        if (a.color === "tracked") return true;   // tracked: no dedup after template check
         const norm = _normForFilter(a.text);
         if (_seenNonTracked.has(norm)) return false;
         _seenNonTracked.add(norm);
@@ -1011,19 +1014,14 @@ async function startReview() {
     // Pre-filters (run in parallel for speed)
     const [agreementIndices, trivialAddedIndices] = await Promise.all([
       candidateComments.length ? filterAgreementComments(candidateComments) : Promise.resolve(new Set()),
-      // Only run the AI trivial-filter on non-tracked items (TC insertions always surface)
-      allAdded.some(a => a.color !== "tracked") ? filterTrivialAdditions(allAdded.filter(a => a.color !== "tracked"), templateText) : Promise.resolve(new Set()),
+      allAdded.length ? filterTrivialAdditions(allAdded, templateText) : Promise.resolve(new Set()),
     ]);
 
     const items = [
       ...candidateComments.filter((_, idx) => !agreementIndices.has(idx))
         .map((c, idx) => ({ type: "Comment", text: c.content || "", anchor: c.anchoredText || "", author: c.author || "", _commentContent: c.content || "", _commentAnchor: c.anchoredText || "", _commentIdx: idx })),
       ...struckFiltered.map(t => ({ type: "Removed Language", text: t, anchor: "", author: "" })),
-      ...allAdded.filter((a, idx) => {
-          if (a.color === "tracked") return true; // TC insertions always kept
-          const nonTrackedIdx = allAdded.slice(0, idx + 1).filter(x => x.color !== "tracked").length - 1;
-          return !trivialAddedIndices.has(nonTrackedIdx);
-        })
+      ...allAdded.filter((a, idx) => !trivialAddedIndices.has(idx))
         .map(a => ({ type: "Added Language", text: a.text, anchor: a._paraAnchor || "", author: "" })),
     ].filter(i => i.text.trim().length > 2);
 
