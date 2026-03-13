@@ -371,7 +371,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260313-E</span>
+        <span style="font-size:9px;color:#6b7280;">v20260313-F</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1208,7 +1208,7 @@ ${decisionLogic}
 Never include company names in output — use "the counterparty", "the customer", "the vendor".
 "sectionRef" must be a section number (e.g. "8.3"), exhibit (e.g. "Exhibit A"), or schedule (e.g. "Schedule 1") — whatever heading precedes this text. Leave blank if not identifiable.
 "source" must be exactly one of: "Hard Limit" (violates a must-have position), "Standard Template" (deviates from our standard language), "Playbook Preference" (softer fallback position applies), "Rewording" (counterparty restating without substantive change), "Novel Language" (no playbook position covers this).
-"reasoning" must always be populated — explain what deviates from the template/positions and why you made this recommendation. Never leave it empty.
+"reasoning" must always be populated — 1-2 tight sentences max: what specifically deviates and why that drives the recommendation. No preamble, no restating the found text. Never leave it empty.
 "suggestedLanguage" must always be populated when recommendation is "negotiate". Never leave it empty for a negotiate recommendation.
 Return JSON only: {"category":"","sectionRef":"","found":"","recommendation":"accept|negotiate|reject","reasoning":"","suggestedLanguage":"","source":""}`;
 
