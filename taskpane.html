@@ -361,7 +361,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260312-M</span>
+        <span style="font-size:9px;color:#6b7280;">v20260312-N</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1310,11 +1310,19 @@ function getDocumentChanges() {
             }
             flushS(); flushC();
 
-            for (const ins of para.getElementsByTagNameNS(WNS, "ins")) {
-              const ts = [];
-              for (const r of ins.getElementsByTagNameNS(WNS, "r")) { const t = r.getElementsByTagNameNS(WNS, "t")[0]; if (t && t.textContent) ts.push(t.textContent); }
-              const c = ts.join("").trim();
-              if (c.length > 1) ooxmlInserted.push({ text: c, color: "tracked" });
+            // If para has <w:ins>, use full para text (not tiny fragments) for context
+            const insEls = para.getElementsByTagNameNS(WNS, "ins");
+            if (insEls.length > 0) {
+              const allT = [];
+              for (const run of para.getElementsByTagNameNS(WNS, "r")) {
+                let el = run.parentNode; let inDel = false;
+                while (el && el !== para) { if (el.localName === "del") { inDel = true; break; } el = el.parentNode; }
+                if (inDel) continue;
+                const tEl = run.getElementsByTagNameNS(WNS, "t")[0];
+                if (tEl && tEl.textContent) allT.push(tEl.textContent);
+              }
+              const paraText = allT.join("").trim();
+              if (paraText.length > 5) ooxmlInserted.push({ text: paraText, color: "tracked" });
             }
           }
         }
@@ -1571,15 +1579,21 @@ function getOoxmlChanges() {
           flushStrike();
           flushColor();
 
-          // ── Tracked insertions: <w:ins> children of this paragraph ──────
-          for (const ins of para.getElementsByTagNameNS(WNS, "ins")) {
-            const texts = [];
-            for (const run of ins.getElementsByTagNameNS(WNS, "r")) {
+          // ── Tracked insertions: if para has any <w:ins>, use full para text ──
+          const insEls = para.getElementsByTagNameNS(WNS, "ins");
+          if (insEls.length > 0) {
+            // Collect all runs NOT inside a <w:del> to build full paragraph context
+            const allT = [];
+            for (const run of para.getElementsByTagNameNS(WNS, "r")) {
+              let el = run.parentNode;
+              let inDel = false;
+              while (el && el !== para) { if (el.localName === "del") { inDel = true; break; } el = el.parentNode; }
+              if (inDel) continue;
               const tEl = run.getElementsByTagNameNS(WNS, "t")[0];
-              if (tEl && tEl.textContent) texts.push(tEl.textContent);
+              if (tEl && tEl.textContent) allT.push(tEl.textContent);
             }
-            const combined = texts.join("").trim();
-            if (combined.length > 1) inserted.push({ text: combined, color: "tracked" });
+            const paraText = allT.join("").trim();
+            if (paraText.length > 5) inserted.push({ text: paraText, color: "tracked" });
           }
         }
 
