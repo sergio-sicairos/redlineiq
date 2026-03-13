@@ -141,14 +141,12 @@
       width:60px; height:60px; display:inline-block; object-fit:contain;
     }
     @keyframes cardClear {
-      0%   { opacity:1; transform:translateX(0) scaleY(1); max-height:600px; margin-bottom:8px; padding:12px; }
-      40%  { opacity:0.4; transform:translateX(18px) scaleY(0.97); }
-      70%  { opacity:0; transform:translateX(60px) scaleY(0.6); max-height:600px; }
-      100% { opacity:0; transform:translateX(60px) scaleY(0); max-height:0; margin-bottom:0; padding:0; border-width:0; }
+      0%   { opacity:1; transform:translateX(0); }
+      100% { opacity:0; transform:translateX(52px); }
     }
     .clause-card-clearing {
-      animation: cardClear 0.42s cubic-bezier(0.4,0,0.6,1) forwards;
-      overflow:hidden; pointer-events:none;
+      animation: cardClear 0.32s ease-in forwards;
+      pointer-events:none;
     }
     @keyframes marqueeShine {
       0%   { background-position: -200% center; }
@@ -373,7 +371,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260313-D</span>
+        <span style="font-size:9px;color:#6b7280;">v20260313-E</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -1930,92 +1928,93 @@ function renderResults(result) {
   updateProgress();
 }
 
+function buildClauseCard(c, i, isLiability = false) {
+  const dec = c.userDecision || c.recommendation;
+  return `
+  <div class="clause-card ${dec}${isLiability ? " clause-card-liability" : ""}" id="clause-${i}" onclick="cardClick(event,${i})">
+    <div style="display:flex;align-items:center;gap:5px;margin-bottom:6px;">
+      ${{
+        "Comment":          `<span class="badge" style="background:rgba(255,255,255,0.08);color:#ffffff;border:1px solid rgba(255,255,255,0.25)">💬 Comment</span>`,
+        "Added Language":   `<span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)">✏️ Added Language</span>`,
+        "Removed Language": `<span class="badge" style="background:rgba(224,32,32,0.1);color:#e02020;border:1px solid rgba(224,32,32,0.4)">✂️ Removed Language</span>`,
+      }[c._signalType] || `<span class="badge" style="background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.4)">${escHtml(safeStr(c._signalType||c.category))}</span>`}
+      <span style="margin-left:auto;display:flex;align-items:center;gap:4px;">
+        <span class="badge" style="${{
+          accept:    'background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)',
+          negotiate: 'background:rgba(234,179,8,0.1);color:#eab308;border:1px solid rgba(234,179,8,0.4)',
+          reject:    'background:rgba(224,32,32,0.1);color:#e02020;border:1px solid rgba(224,32,32,0.4)',
+        }[c.recommendation] || 'background:rgba(255,255,255,0.03);color:#888888;border:1px solid rgba(255,255,255,0.15)'}">${{accept:"Accept",negotiate:"Counter",reject:"Reject"}[c.recommendation]||safeStr(c.recommendation)}</span>
+        ${safeStr(c.source) ? `<span class="info-icon" onclick="event.stopPropagation()">i<span class="info-tip">${escHtml(safeStr(c.source))}</span></span>` : ""}
+      </span>
+    </div>
+    ${(c._isComment ? (c._commentContent || c.found) : c.found) ? `
+    <div class="found-box" onclick="event.stopPropagation();navigateToClause(${i})" title="Click to jump to this location in the document" style="margin-bottom:8px;">
+      <div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Found</div>
+      <div style="position:relative;padding-right:16px;">
+        <span id="found-text-${i}" class="found-text-clamped" style="font-size:11px;color:#cccccc;">${escHtml(safeStr(c._isComment ? (c._commentContent || c.found) : c.found))}</span>
+        <span class="found-expand-btn" id="expand-btn-${i}" onclick="event.stopPropagation();toggleFoundText(${i})">+</span>
+      </div>
+    </div>
+    ` : ""}
+    <div style="margin-bottom:8px;background:rgba(255,255,255,0.02);padding:7px 8px;border-radius:3px;border:1px solid rgba(255,255,255,0.06);">
+      <div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Analysis</div>
+      <div style="font-size:11px;color:#cccccc;line-height:1.6;position:relative;padding-right:16px;">
+        <span id="reason-text-${i}" class="found-text-clamped" style="color:${c.reasoning?'#cccccc':'#555555'};">${escHtml(safeStr(c.reasoning) || "—")}</span>
+        <span class="found-expand-btn" id="reason-btn-${i}" onclick="event.stopPropagation();toggleReasonText(${i})">+</span>
+      </div>
+    </div>
+    ${(c.suggestedLanguage || c.recommendation === "negotiate" || (c.recommendation === "reject" && c._signalType === "Removed Language")) ? `
+      <div style="font-size:11px;background:rgba(91,14,255,0.08);padding:8px;margin-bottom:8px;line-height:1.5;border:1px solid rgba(91,14,255,0.35);border-radius:4px;box-shadow:0 0 8px rgba(91,14,255,0.12);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+          <span style="font-size:10px;color:#9b72ff;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">⬡ Suggested</span>
+          <span style="display:flex;gap:4px;">
+            <button id="edit-btn-${i}" onclick="event.stopPropagation();editSuggestion(${i})" style="font-size:9px;padding:2px 7px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.04);color:#888;cursor:pointer;font-family:inherit;letter-spacing:0.04em;">✎ Edit</button>
+            <button id="rephrase-btn-${i}" onclick="event.stopPropagation();rephraseSuggestion(${i})" style="font-size:9px;padding:2px 7px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.04);color:#888;cursor:pointer;font-family:inherit;letter-spacing:0.04em;">↺ Rephrase</button>
+          </span>
+        </div>
+        <div id="sugg-view-${i}" style="position:relative;padding-right:16px;">
+          <span id="sugg-text-${i}" class="found-text-clamped" style="font-size:11px;color:${c.suggestedLanguage?'#cccccc':'#555555'};display:-webkit-box;">${escHtml(safeStr(c.suggestedLanguage) || "—")}</span>
+          <span class="found-expand-btn" id="sugg-btn-${i}" onclick="event.stopPropagation();toggleSuggText(${i})">+</span>
+        </div>
+        <div id="sugg-edit-${i}" style="display:none;">
+          <textarea id="sugg-ta-${i}" onclick="event.stopPropagation()" style="width:100%;box-sizing:border-box;background:#1a1a1a;border:1px solid rgba(255,255,255,0.25);color:#cccccc;font-size:11px;font-family:inherit;line-height:1.5;padding:5px;resize:vertical;min-height:80px;outline:none;"></textarea>
+          <div style="display:flex;gap:4px;margin-top:4px;">
+            <button onclick="event.stopPropagation();saveSuggestion(${i})" style="font-size:9px;padding:2px 10px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.1);color:#fff;cursor:pointer;font-family:inherit;">Save</button>
+            <button onclick="event.stopPropagation();cancelEditSuggestion(${i})" style="font-size:9px;padding:2px 10px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:#888;cursor:pointer;font-family:inherit;">Cancel</button>
+          </div>
+        </div>
+      </div>
+    ` : ""}
+    <div class="decision-btns">
+      ${["accept","negotiate","reject","reply"].map(d=>`
+        <button class="decision-btn btn-${d} ${dec===d?`active-${d}`:""}"
+          onclick="setDecision(${i},'${d}')">${{accept:"✓ Accept",negotiate:"↔ Counter",reject:"✕ Reject",reply:"↩ Reply"}[d]}</button>
+      `).join("")}
+    </div>
+    ${c.userDecision && !c.applied ? `
+      <button onclick="completeDecision(${i})" style="margin-top:8px;width:100%;padding:7px;border:1px solid rgba(224,32,32,0.5);background:rgba(224,32,32,0.82);color:#fff;font-size:12px;font-weight:600;cursor:pointer;">
+        Complete
+      </button>
+    ` : ""}
+    ${c.applied ? `<div style="font-size:10px;color:#555555;margin-top:6px;">✓ Applied to document</div>` : ""}
+  </div>`;
+}
+
 function renderClauses() {
   const container = document.getElementById("clauses-list");
   const LIABILITY_CATS = /liability|indemnif/i;
   const liabilityIndices = reviewClauses.map((c,i) => i).filter(i => LIABILITY_CATS.test(reviewClauses[i].category || ""));
   const otherIndices     = reviewClauses.map((c,i) => i).filter(i => !LIABILITY_CATS.test(reviewClauses[i].category || ""));
-  const clauseCard = (c, i, isLiability = false) => {
-    const dec = c.userDecision || c.recommendation;
-    return `
-    <div class="clause-card ${dec}${isLiability ? " clause-card-liability" : ""}" id="clause-${i}" onclick="cardClick(event,${i})">
-      <div style="display:flex;align-items:center;gap:5px;margin-bottom:6px;">
-        ${{
-          "Comment":          `<span class="badge" style="background:rgba(255,255,255,0.08);color:#ffffff;border:1px solid rgba(255,255,255,0.25)">💬 Comment</span>`,
-          "Added Language":   `<span class="badge" style="background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)">✏️ Added Language</span>`,
-          "Removed Language": `<span class="badge" style="background:rgba(224,32,32,0.1);color:#e02020;border:1px solid rgba(224,32,32,0.4)">✂️ Removed Language</span>`,
-        }[c._signalType] || `<span class="badge" style="background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.4)">${escHtml(safeStr(c._signalType||c.category))}</span>`}
-        <span style="margin-left:auto;display:flex;align-items:center;gap:4px;">
-          <span class="badge" style="${{
-            accept:    'background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.4)',
-            negotiate: 'background:rgba(234,179,8,0.1);color:#eab308;border:1px solid rgba(234,179,8,0.4)',
-            reject:    'background:rgba(224,32,32,0.1);color:#e02020;border:1px solid rgba(224,32,32,0.4)',
-          }[c.recommendation] || 'background:rgba(255,255,255,0.03);color:#888888;border:1px solid rgba(255,255,255,0.15)'}">${{accept:"Accept",negotiate:"Counter",reject:"Reject"}[c.recommendation]||safeStr(c.recommendation)}</span>
-          ${safeStr(c.source) ? `<span class="info-icon" onclick="event.stopPropagation()">i<span class="info-tip">${escHtml(safeStr(c.source))}</span></span>` : ""}
-        </span>
-      </div>
-      ${(c._isComment ? (c._commentContent || c.found) : c.found) ? `
-      <div class="found-box" onclick="event.stopPropagation();navigateToClause(${i})" title="Click to jump to this location in the document" style="margin-bottom:8px;">
-        <div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Found</div>
-        <div style="position:relative;padding-right:16px;">
-          <span id="found-text-${i}" class="found-text-clamped" style="font-size:11px;color:#cccccc;">${escHtml(safeStr(c._isComment ? (c._commentContent || c.found) : c.found))}</span>
-          <span class="found-expand-btn" id="expand-btn-${i}" onclick="event.stopPropagation();toggleFoundText(${i})">+</span>
-        </div>
-      </div>
-      ` : ""}
-      <div style="margin-bottom:8px;background:rgba(255,255,255,0.02);padding:7px 8px;border-radius:3px;border:1px solid rgba(255,255,255,0.06);">
-        <div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Analysis</div>
-        <div style="font-size:11px;color:#cccccc;line-height:1.6;position:relative;padding-right:16px;">
-          <span id="reason-text-${i}" class="found-text-clamped" style="color:${c.reasoning?'#cccccc':'#555555'};">${escHtml(safeStr(c.reasoning) || "—")}</span>
-          <span class="found-expand-btn" id="reason-btn-${i}" onclick="event.stopPropagation();toggleReasonText(${i})">+</span>
-        </div>
-      </div>
-      ${(c.suggestedLanguage || c.recommendation === "negotiate" || (c.recommendation === "reject" && c._signalType === "Removed Language")) ? `
-        <div style="font-size:11px;background:rgba(91,14,255,0.08);padding:8px;margin-bottom:8px;line-height:1.5;border:1px solid rgba(91,14,255,0.35);border-radius:4px;box-shadow:0 0 8px rgba(91,14,255,0.12);">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
-            <span style="font-size:10px;color:#9b72ff;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">⬡ Suggested</span>
-            <span style="display:flex;gap:4px;">
-              <button id="edit-btn-${i}" onclick="event.stopPropagation();editSuggestion(${i})" style="font-size:9px;padding:2px 7px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.04);color:#888;cursor:pointer;font-family:inherit;letter-spacing:0.04em;">✎ Edit</button>
-              <button id="rephrase-btn-${i}" onclick="event.stopPropagation();rephraseSuggestion(${i})" style="font-size:9px;padding:2px 7px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.04);color:#888;cursor:pointer;font-family:inherit;letter-spacing:0.04em;">↺ Rephrase</button>
-            </span>
-          </div>
-          <div id="sugg-view-${i}" style="position:relative;padding-right:16px;">
-            <span id="sugg-text-${i}" class="found-text-clamped" style="font-size:11px;color:${c.suggestedLanguage?'#cccccc':'#555555'};display:-webkit-box;">${escHtml(safeStr(c.suggestedLanguage) || "—")}</span>
-            <span class="found-expand-btn" id="sugg-btn-${i}" onclick="event.stopPropagation();toggleSuggText(${i})">+</span>
-          </div>
-          <div id="sugg-edit-${i}" style="display:none;">
-            <textarea id="sugg-ta-${i}" onclick="event.stopPropagation()" style="width:100%;box-sizing:border-box;background:#1a1a1a;border:1px solid rgba(255,255,255,0.25);color:#cccccc;font-size:11px;font-family:inherit;line-height:1.5;padding:5px;resize:vertical;min-height:80px;outline:none;"></textarea>
-            <div style="display:flex;gap:4px;margin-top:4px;">
-              <button onclick="event.stopPropagation();saveSuggestion(${i})" style="font-size:9px;padding:2px 10px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.1);color:#fff;cursor:pointer;font-family:inherit;">Save</button>
-              <button onclick="event.stopPropagation();cancelEditSuggestion(${i})" style="font-size:9px;padding:2px 10px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:#888;cursor:pointer;font-family:inherit;">Cancel</button>
-            </div>
-          </div>
-        </div>
-      ` : ""}
-      <div class="decision-btns">
-        ${["accept","negotiate","reject","reply"].map(d=>`
-          <button class="decision-btn btn-${d} ${dec===d?`active-${d}`:""}"
-            onclick="setDecision(${i},'${d}')">${{accept:"✓ Accept",negotiate:"↔ Counter",reject:"✕ Reject",reply:"↩ Reply"}[d]}</button>
-        `).join("")}
-      </div>
-      ${c.userDecision && !c.applied ? `
-        <button onclick="completeDecision(${i})" style="margin-top:8px;width:100%;padding:7px;border:1px solid rgba(224,32,32,0.5);background:rgba(224,32,32,0.82);color:#fff;font-size:12px;font-weight:600;cursor:pointer;">
-          Complete
-        </button>
-      ` : ""}
-      ${c.applied ? `<div style="font-size:10px;color:#555555;margin-top:6px;">✓ Applied to document</div>` : ""}
-    </div>`;
-  };
   const sectionHeader = (label) =>
     `<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#777;padding:10px 2px 6px;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:6px;">${label}</div>`;
   let html = "";
   if (liabilityIndices.length) {
     html += sectionHeader("Liability & Indemnification");
-    html += liabilityIndices.map(i => clauseCard(reviewClauses[i], i, true)).join("");
+    html += liabilityIndices.map(i => buildClauseCard(reviewClauses[i], i, true)).join("");
   }
   if (otherIndices.length) {
     if (liabilityIndices.length) html += sectionHeader("All Other Changes");
-    html += otherIndices.map(i => clauseCard(reviewClauses[i], i)).join("");
+    html += otherIndices.map(i => buildClauseCard(reviewClauses[i], i)).join("");
   }
   container.innerHTML = html;
   // Hide already-applied cards unless user has toggled them visible
@@ -2163,9 +2162,20 @@ function toggleFoundText(i) {
 }
 
 function setDecision(idx, decision) {
-  reviewClauses[idx].userDecision = decision;
-  reviewClauses[idx].applied = false;
-  renderClauses();
+  const c = reviewClauses[idx];
+  c.userDecision = decision;
+  c.applied = false;
+  // Swap just the affected card to avoid disrupting other cards' display state
+  const el = document.getElementById("clause-" + idx);
+  if (el) {
+    const isLiability = el.classList.contains("clause-card-liability");
+    const tmp = document.createElement("div");
+    tmp.innerHTML = buildClauseCard(c, idx, isLiability);
+    el.replaceWith(tmp.firstElementChild);
+    setTimeout(initFoundExpanders, 50);
+  } else {
+    renderClauses();
+  }
   updateProgress();
 }
 
@@ -2175,16 +2185,16 @@ function completeDecision(idx) {
   c.applied = true;
   applyDecisionToDoc(idx, c.userDecision);
   updateProgress();
+  _updateClearedBar();
+  // If cleared items are currently shown, leave card visible (just update bar label)
+  if (_showCleared) return;
   const el = document.getElementById("clause-" + idx);
-  if (el) {
-    el.classList.add("clause-card-clearing");
-    el.addEventListener("animationend", () => {
-      el.style.display = "none";
-      _updateClearedBar();
-    }, { once: true });
-  } else {
-    _updateClearedBar();
-  }
+  if (!el) return;
+  el.classList.add("clause-card-clearing");
+  el.addEventListener("animationend", () => {
+    el.classList.remove("clause-card-clearing");
+    el.style.display = "none";
+  }, { once: true });
 }
 
 function _updateClearedBar() {
@@ -2204,7 +2214,13 @@ function toggleClearedCards() {
   reviewClauses.forEach((c, i) => {
     if (!c.applied) return;
     const el = document.getElementById("clause-" + i);
-    if (el) el.style.display = _showCleared ? "" : "none";
+    if (!el) return;
+    if (_showCleared) {
+      el.classList.remove("clause-card-clearing");
+      el.style.display = "";
+    } else {
+      el.style.display = "none";
+    }
   });
   _updateClearedBar();
 }
