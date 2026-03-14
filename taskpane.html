@@ -382,7 +382,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260313-L</span>
+        <span style="font-size:9px;color:#6b7280;">v20260313-M</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -2251,14 +2251,19 @@ function _updateClearedBar() {
 function toggleClearedCards() {
   _showCleared = !_showCleared;
   reviewClauses.forEach((c, i) => {
-    if (!c.applied) return;
     const el = document.getElementById("clause-" + i);
     if (!el) return;
     if (_showCleared) {
-      el.classList.remove("clause-card-clearing");
-      el.style.display = "";
+      // Show only cleared cards, hide open ones
+      if (c.applied) {
+        el.classList.remove("clause-card-clearing");
+        el.style.display = "";
+      } else {
+        el.style.display = "none";
+      }
     } else {
-      el.style.display = "none";
+      // Show only open cards, hide cleared ones
+      el.style.display = c.applied ? "none" : "";
     }
   });
   _updateClearedBar();
