@@ -382,7 +382,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260313-K</span>
+        <span style="font-size:9px;color:#6b7280;">v20260313-L</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -2198,7 +2198,8 @@ function setDecision(idx, decision) {
 
 function completeDecision(idx) {
   const c = reviewClauses[idx];
-  if (!c || !c.userDecision) return;
+  if (!c) return;
+  if (!c.userDecision) c.userDecision = c.recommendation; // default to AI recommendation
   c.applied = true;
   applyDecisionToDoc(idx, c.userDecision);
   updateProgress();
