@@ -88,8 +88,19 @@
     .found-expand-btn { font-size:14px; line-height:1; color:#555; cursor:pointer; display:none; position:absolute; right:0; top:0; padding:0 2px; user-select:none; }
     .clause-card.nav-active { background:#1a1a1a; border-color:rgba(255,255,255,0.5); border-left-color:#ffffff; }
     .clause-card.nav-active .found-box { background:rgba(255,255,255,0.05); border-color:rgba(255,255,255,0.2); }
-    .clause-card-liability { border-left-color:rgba(255,255,255,0.55) !important; background:#161616 !important; }
-    .clause-card-liability:hover { background:#1c1c1c !important; border-left-color:rgba(255,255,255,0.8) !important; }
+    .liability-group {
+      border:1px solid rgba(255,255,255,0.2);
+      border-left:3px solid rgba(255,255,255,0.6);
+      background:#151515;
+      padding:10px 10px 4px;
+      margin-bottom:10px;
+    }
+    .liability-group-header {
+      font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em;
+      color:rgba(255,255,255,0.5); margin-bottom:8px;
+    }
+    .clause-card-liability { background:#181818 !important; border-color:rgba(255,255,255,0.08) !important; border-left-color:rgba(255,255,255,0.15) !important; }
+    .clause-card-liability:hover { background:#1e1e1e !important; }
     .decision-btns { display:flex; gap:4px; flex-wrap:wrap; margin-top:8px; }
     .decision-btn {
       display:inline-flex; align-items:center;
@@ -371,7 +382,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260313-G</span>
+        <span style="font-size:9px;color:#6b7280;">v20260313-H</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -2009,8 +2020,9 @@ function renderClauses() {
     `<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#777;padding:10px 2px 6px;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:6px;">${label}</div>`;
   let html = "";
   if (liabilityIndices.length) {
-    html += sectionHeader("Liability & Indemnification");
+    html += `<div class="liability-group"><div class="liability-group-header">⚠ Liability &amp; Indemnification</div>`;
     html += liabilityIndices.map(i => buildClauseCard(reviewClauses[i], i, true)).join("");
+    html += `</div>`;
   }
   if (otherIndices.length) {
     if (liabilityIndices.length) html += sectionHeader("All Other Changes");
