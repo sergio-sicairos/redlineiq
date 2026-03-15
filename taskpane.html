@@ -382,7 +382,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260314-A</span>
+        <span style="font-size:9px;color:#6b7280;">v20260314-B</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.href=window.location.pathname+'?v='+Date.now()">↺ Refresh</span>
       </div>
     </div>
@@ -2003,7 +2003,7 @@ function buildClauseCard(c, i, isLiability = false) {
       `).join("")}
     </div>
     ${!c.applied ? `
-      <button onclick="completeDecision(${i})" style="margin-top:8px;width:100%;padding:7px;border:1px solid rgba(224,32,32,0.5);background:rgba(224,32,32,0.82);color:#fff;font-size:12px;font-weight:600;cursor:pointer;">
+      <button onclick="completeDecision(${i})" style="margin-top:8px;width:100%;padding:7px;border:1px solid rgba(88,101,242,0.5);background:rgba(88,101,242,0.15);color:#7983f5;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:0.06em;text-transform:uppercase;font-family:inherit;transition:background 0.15s,border-color 0.15s;" onmouseover="this.style.background='rgba(88,101,242,0.25)';this.style.borderColor='rgba(88,101,242,0.8)'" onmouseout="this.style.background='rgba(88,101,242,0.15)';this.style.borderColor='rgba(88,101,242,0.5)'">
         Complete
       </button>
     ` : ""}
