@@ -2225,9 +2225,10 @@ function completeDecision(idx) {
   el.addEventListener("animationend", hide, { once: true });
 }
 
-function undoDecision(idx) {
+async function undoDecision(idx) {
   const c = reviewClauses[idx];
   if (!c) return;
+  await undoDecisionFromDoc(idx);
   c.applied = false;
   // Show card again before swapping HTML (it may be hidden)
   const el = document.getElementById("clause-" + idx);
@@ -2235,6 +2236,78 @@ function undoDecision(idx) {
   setDecision(idx, c.userDecision); // re-render card in-place with decision still set
   updateProgress();
   _updateClearedBar();
+}
+
+async function undoDecisionFromDoc(idx) {
+  const c = reviewClauses[idx];
+  if (!c || !c._undoData) return;
+  const u = c._undoData;
+  try {
+    if (u.type === 'resolve_comment') {
+      await Word.run(async (context) => {
+        const coll = context.document.body.getComments();
+        coll.load("items");
+        await context.sync();
+        const comment = coll.items[u.commentIdx];
+        if (comment) { comment.resolved = false; await context.sync(); }
+      });
+
+    } else if (u.type === 'accept_change') {
+      alert("Accepted tracked changes cannot be reversed here — use Ctrl+Z in Word to undo.");
+
+    } else if (u.type === 'comment_reply') {
+      await Word.run(async (context) => {
+        const coll = context.document.body.getComments();
+        coll.load("items");
+        await context.sync();
+        const comment = coll.items[u.commentIdx];
+        if (!comment) return;
+        comment.replies.load("items/content");
+        await context.sync();
+        const replies = [...comment.replies.items].reverse();
+        for (const reply of replies) {
+          if ((reply.content || "").trim() === u.replyText.trim()) {
+            reply.delete();
+            await context.sync();
+            break;
+          }
+        }
+      });
+
+    } else if (u.type === 'insert_comment') {
+      await Word.run(async (context) => {
+        const coll = context.document.body.getComments();
+        coll.load("items/content");
+        await context.sync();
+        for (const comment of coll.items) {
+          if ((comment.content || "").trim() === u.commentText.trim()) {
+            comment.delete();
+            await context.sync();
+            break;
+          }
+        }
+      });
+
+    } else if (u.type === 'strikethrough_comment') {
+      await Word.run(async (context) => {
+        const coll = context.document.body.getComments();
+        coll.load("items/content");
+        await context.sync();
+        for (const comment of coll.items) {
+          if ((comment.content || "").trim() === u.commentText.trim()) {
+            comment.delete();
+            break;
+          }
+        }
+        const range = await findClauseRange(context, u.foundText);
+        if (range) range.font.strikeThrough = false;
+        await context.sync();
+      });
+    }
+  } catch(e) {
+    console.warn("undoDecisionFromDoc failed:", e);
+  }
+  c._undoData = null;
 }
 
 function _updateClearedBar() {
@@ -2303,6 +2376,7 @@ async function applyDecisionToDoc(idx, decision) {
         comment.resolved = true;
         await context.sync();
       });
+      clause._undoData = { type: 'resolve_comment', commentIdx: clause._commentIdx };
     } catch(e) {
       alert("Could not resolve thread: " + (e.message || e));
     }
@@ -2325,12 +2399,14 @@ async function applyDecisionToDoc(idx, decision) {
         }
         await context.sync();
       });
+      clause._undoData = { type: 'accept_change' };
     } catch(e) { /* tracked changes API unavailable — accept recorded in UI only */ }
     return;
   }
 
   // Comment cards: reply to the thread for negotiate, reject, and reply
   if (clause._isComment && clause._commentIdx != null && (decision === "negotiate" || decision === "reject" || decision === "reply")) {
+    const replyText = clause.suggestedLanguage || (decision === "reject" ? "✕ Rejected" : "↔ Counter proposed — see playbook for suggested language.");
     try {
       await Word.run(async (context) => {
         const coll = context.document.body.getComments();
@@ -2338,10 +2414,10 @@ async function applyDecisionToDoc(idx, decision) {
         await context.sync();
         const comment = coll.items[clause._commentIdx];
         if (!comment) return;
-        const replyText = clause.suggestedLanguage || (decision === "reject" ? "✕ Rejected" : "↔ Counter proposed — see playbook for suggested language.");
         comment.reply(replyText);
         await context.sync();
       });
+      clause._undoData = { type: 'comment_reply', commentIdx: clause._commentIdx, replyText };
     } catch(e) {
       alert("Could not post reply: " + (e.message || e));
     }
@@ -2352,14 +2428,15 @@ async function applyDecisionToDoc(idx, decision) {
   if (decision === "reply") {
     const foundText = (clause && clause.found) || "";
     if (!foundText) return;
+    const replyText = clause.suggestedLanguage || "↩ Reply";
     try {
       await Word.run(async (context) => {
         const range = await findClauseRange(context, foundText);
         if (!range) return;
-        const replyText = clause.suggestedLanguage || "↩ Reply";
         range.insertComment(replyText);
         await context.sync();
       });
+      clause._undoData = { type: 'insert_comment', commentText: replyText, foundText };
     } catch(e) {
       alert("Could not insert comment: " + (e.message || e));
     }
@@ -2369,6 +2446,10 @@ async function applyDecisionToDoc(idx, decision) {
   const foundText = (clause && clause.found) || "";
   if (!foundText) return;
 
+  const actionText = decision === "negotiate"
+    ? (clause.suggestedLanguage || "↔ Counter proposed — see playbook for suggested language.")
+    : (clause.suggestedLanguage || clause.reasoning || "✕ Rejected");
+
   try {
     await Word.run(async (context) => {
 
@@ -2377,18 +2458,19 @@ async function applyDecisionToDoc(idx, decision) {
       if (!range) return;
 
       if (decision === "negotiate") {
-        const counter = clause.suggestedLanguage || "↔ Counter proposed — see playbook for suggested language.";
-        range.insertComment(counter);
+        range.insertComment(actionText);
 
       } else if (decision === "reject") {
         range.font.strikeThrough = true;
-        const rejectText = clause.suggestedLanguage || clause.reasoning || "✕ Rejected";
-        range.insertComment(rejectText);
+        range.insertComment(actionText);
 
       }
 
       await context.sync();
     });
+    clause._undoData = decision === "reject"
+      ? { type: 'strikethrough_comment', commentText: actionText, foundText }
+      : { type: 'insert_comment', commentText: actionText, foundText };
   } catch(e) {
     if (e.message && e.message.includes("comment")) {
       alert("Comments are not supported in this version of Word. Try Word Online or Word 365.");
