@@ -3035,6 +3035,33 @@ function anchorCandidates(text, fromEnd) {
     .filter(s => s.length >= 10);
 }
 
+// For Removed Language: search tracked-change deletions for the matching text,
+// then fall back to the navContext paragraph. body.search() skips deleted text
+// so it finds an unrelated occurrence earlier in the document.
+async function findRemovedLanguageRange(context, text, navContext) {
+  try {
+    const changes = context.document.body.getTrackedChanges();
+    changes.load("items/text,items/type");
+    await context.sync();
+    const needle = normalizeForSearch(text).toLowerCase().slice(0, 80);
+    for (const change of changes.items) {
+      if (change.type !== "Delete") continue;
+      const t = normalizeForSearch(change.text || "").toLowerCase();
+      if (t.length > 3 && (t.includes(needle.slice(0, 40)) || needle.includes(t.slice(0, 40)))) {
+        const range = change.getRange();
+        range.load("text");
+        await context.sync();
+        return range;
+      }
+    }
+  } catch(e) {}
+  // Fall back to navContext paragraph if tracked-changes search missed
+  if (navContext && navContext.length >= 10) {
+    return await findParagraphContaining(context, navContext);
+  }
+  return null;
+}
+
 // Find the best range for a clause in the document.
 // Uses start+end anchor expansion for full coverage across paragraph boundaries.
 async function findClauseRange(context, foundText) {
@@ -3187,13 +3214,18 @@ function cardClick(event, idx) {
 
   Word.run(async (context) => {
     let range = null;
+    // Removed Language: search tracked-change deletions first — body.search() skips deleted text
+    // and ends up highlighting an unrelated match above.
+    if (c._signalType === "Removed Language") {
+      range = await findRemovedLanguageRange(context, searchText, c._navContext);
+    }
     // For TC deletions with short text, body.search() finds the wrong occurrence.
     // Use the surrounding paragraph context to find the right paragraph instead.
-    if (c._navContext && c._navContext.length >= 10 && searchText.length < 25) {
+    if (!range && c._navContext && c._navContext.length >= 10 && searchText.length < 25) {
       range = await findParagraphContaining(context, c._navContext);
     }
     if (!range) range = await findClauseRange(context, searchText);
-    if (!range && (c._signalType === "Added Language" || c._navContext)) {
+    if (!range && (c._signalType === "Added Language" || c._signalType === "Removed Language" || c._navContext)) {
       range = await findParagraphContaining(context, c._navContext || searchText);
     }
     if (!range) return;
@@ -3213,11 +3245,14 @@ function navigateToClause(idx) {
 
   Word.run(async (context) => {
     let range = null;
-    if (clause._navContext && clause._navContext.length >= 10 && foundText.length < 25) {
+    if (clause._signalType === "Removed Language") {
+      range = await findRemovedLanguageRange(context, foundText, clause._navContext);
+    }
+    if (!range && clause._navContext && clause._navContext.length >= 10 && foundText.length < 25) {
       range = await findParagraphContaining(context, clause._navContext);
     }
     if (!range) range = await findClauseRange(context, foundText);
-    if (!range && (clause._signalType === "Added Language" || clause._navContext)) {
+    if (!range && (clause._signalType === "Added Language" || clause._signalType === "Removed Language" || clause._navContext)) {
       range = await findParagraphContaining(context, clause._navContext || foundText);
     }
     if (!range) return;
