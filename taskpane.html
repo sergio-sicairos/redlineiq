@@ -777,11 +777,11 @@ Office.onReady(async (info) => {
   // Show UI immediately — never block on Drive
   document.getElementById("loading-screen").style.display = "none";
   document.getElementById("tab-bar").style.display = "flex";
+  document.getElementById("main").style.display = "block";
   if (!await getApiKey()) {
     switchTab("settings");
     document.getElementById("key-status").innerHTML = '<span style="color:#f59e0b">Please enter your API key to get started.</span>';
   } else {
-    document.getElementById("main").style.display = "block";
     show("view-idle");
   }
   // Reverse navigation: clicking in the document highlights the matching clause card
