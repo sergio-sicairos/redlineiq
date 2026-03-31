@@ -383,7 +383,7 @@
         Run AI Review
       </button>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <span style="font-size:9px;color:#6b7280;">v20260330-b</span>
+        <span style="font-size:9px;color:#6b7280;">v20260330-c</span>
         <span style="font-size:9px;color:#6b7280;cursor:pointer;text-decoration:underline;" onclick="window.location.replace((window.location.origin+window.location.pathname).replace(/\?.*$/,'')+'?v='+Date.now())">↺ Refresh</span>
       </div>
     </div>
@@ -1075,7 +1075,7 @@ async function startReview() {
           ? item.text
           : "";
       if (!searchText) return;
-      item._preSection = inferSectionFromDoc(searchText, docText);
+      item._preSection = inferSectionFromDoc((item._navContext && item._navContext.length >= 20) ? item._navContext : searchText, docText);
       const pos = docText.toLowerCase().indexOf(searchText.slice(0, 80).toLowerCase());
       if (pos > 0) item._docContext = docText.slice(Math.max(0, pos - 300), pos).trim().slice(-300);
     });
@@ -1872,22 +1872,18 @@ function inferSectionFromDoc(searchText, docText) {
     before = norm(docText).slice(0, normPos);
   }
 
-  // 1. Exhibit / Schedule / Annex heading — must start a line (prevents inline
-  //    references like "as set forth in Exhibit A" from matching)
+  // 1. Exhibit / Schedule / Annex heading — must start a line
   const exhibits = [...before.matchAll(/(?:^|[\r\n])\s*(exhibit\s+[a-z0-9]+|schedule\s+[a-z0-9]+|annex\s+[a-z0-9]+)/gi)];
   if (exhibits.length) return exhibits[exhibits.length - 1][1].trim().replace(/\b\w/g, c => c.toUpperCase());
 
-  // 2. "Section 8.3" explicit label
+  // 2. Numbered heading at line start: "7.", "7.1.", "7.1.2" + whitespace + text
+  //    Requires line-start anchor to avoid matching inline refs like "per Section 7.1"
+  const headings = [...before.matchAll(/(?:^|[\r\n])\s{0,6}(\d{1,2}(?:\.\d{1,3}){0,3})\.?\s{1,4}\S/gm)];
+  if (headings.length) return headings[headings.length - 1][1];
+
+  // 3. "Section 8.3" inline label — last resort
   const labeled = [...before.matchAll(/\bsection\s+(\d{1,2}(?:\.\d{1,3}){0,3})/gi)];
   if (labeled.length) return labeled[labeled.length - 1][1];
-
-  // 3. Dotted number like "8.3" or "1.2.3"
-  const dotted = [...before.matchAll(/\b(\d{1,2}(?:\.\d{1,3}){1,3})\b/g)];
-  if (dotted.length) return dotted[dotted.length - 1][1];
-
-  // 4. "8. Title" heading at line start
-  const headers = [...before.matchAll(/(?:^|[\r\n])\s{0,4}(\d{1,2})\.\s+\S/gm)];
-  if (headers.length) return headers[headers.length - 1][1];
 
   return "";
 }
