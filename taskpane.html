@@ -3041,20 +3041,22 @@ function anchorCandidates(text, fromEnd) {
 async function findRemovedLanguageRange(context, text, navContext) {
   try {
     const changes = context.document.body.getTrackedChanges();
-    changes.load("items/text,items/type");
+    changes.load("items/text");
     await context.sync();
-    const needle = normalizeForSearch(text).toLowerCase().slice(0, 80);
-    for (const change of changes.items) {
-      if (change.type !== "Delete") continue;
-      const t = normalizeForSearch(change.text || "").toLowerCase();
-      if (t.length > 3 && (t.includes(needle.slice(0, 40)) || needle.includes(t.slice(0, 40)))) {
-        const range = change.getRange();
-        range.load("text");
-        await context.sync();
-        return range;
+    const needle = normalizeForSearch(text).toLowerCase();
+    const n30 = needle.slice(0, 30);
+    if (n30.length >= 4) {
+      for (const change of changes.items) {
+        const t = normalizeForSearch(change.text || "").toLowerCase();
+        if (t.length < 4) continue;
+        if (t.includes(n30) || needle.includes(t.slice(0, 30))) {
+          return change.getRange();
+        }
       }
     }
-  } catch(e) {}
+  } catch(e) {
+    console.warn("findRemovedLanguageRange:", e);
+  }
   // Fall back to navContext paragraph if tracked-changes search missed
   if (navContext && navContext.length >= 10) {
     return await findParagraphContaining(context, navContext);
